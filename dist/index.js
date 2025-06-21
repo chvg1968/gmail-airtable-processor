@@ -105,14 +105,14 @@ async function processEmailsHandler(req, res) {
         console.log('Intentando conectar a Gmail...');
         await (0, gmail_1.getGmailProfile)();
         console.log('Conexión a Gmail exitosa.');
-        // Calcula la fecha de hace ~24 horas para la búsqueda de correos
-        const twentyFourHoursAgo = new Date();
-        twentyFourHoursAgo.setDate(twentyFourHoursAgo.getDate() - 1);
-        const year = twentyFourHoursAgo.getFullYear();
-        const month = (twentyFourHoursAgo.getMonth() + 1).toString().padStart(2, '0');
-        const day = twentyFourHoursAgo.getDate().toString().padStart(2, '0');
+        // Calcula la fecha de hace ~48 horas para la búsqueda de correos para darnos un margen de seguridad
+        const fortyEightHoursAgo = new Date();
+        fortyEightHoursAgo.setDate(fortyEightHoursAgo.getDate() - 2);
+        const year = fortyEightHoursAgo.getFullYear();
+        const month = (fortyEightHoursAgo.getMonth() + 1).toString().padStart(2, '0');
+        const day = fortyEightHoursAgo.getDate().toString().padStart(2, '0');
         const searchSinceDateString = `${year}/${month}/${day}`; // Formato YYYY/MM/DD
-        console.log(`INFO: Buscando correos desde ${searchSinceDateString} (últimas ~24 horas)`);
+        console.log(`INFO: Buscando correos desde ${searchSinceDateString} (últimas ~48 horas)`);
         const query = `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
         console.log(`Buscando correos con query: ${query}`);
         const messages = await (0, gmail_1.searchEmails)(query);
@@ -305,7 +305,7 @@ Correos omitidos (sin cuerpo, sin ID, o sin datos extraíbles): ${skippedCount}
 ----------------------------------------
 `;
         console.log(summaryMessage);
-        res.status(200).send('Procesamiento de correos completado. Revisa los logs para el resumen.');
+        res.status(200).send(summaryMessage);
     }
     catch (error) {
         console.error('Error en la ejecución principal:', error);
