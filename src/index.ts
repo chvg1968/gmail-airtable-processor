@@ -341,7 +341,7 @@ export async function processEmailsHandler(req: Request, res: Response) {
         const totalMessagesFound = messages ? messages.length : 0;
         const processedInAirtableCount = successfulAirtableUpserts.size;
 
-        const summaryMessage = `
+        const summaryLog = `
 \n[RESUMEN DE PROCESAMIENTO]
 ----------------------------------------
 Correos encontrados en Gmail: ${totalMessagesFound}
@@ -350,11 +350,23 @@ Correos omitidos (sin cuerpo, sin ID, o sin datos extraíbles): ${skippedCount}
 ----------------------------------------
 `;
 
-        console.log(summaryMessage);
-        res.status(200).send(summaryMessage);
+        console.log(summaryLog); // Mantener el log detallado en la consola
+
+        // Enviar una respuesta JSON estructurada
+        res.status(200).json({
+            message: "Procesamiento de correos completado.",
+            details: {
+                emailsFound: totalMessagesFound,
+                recordsUpserted: processedInAirtableCount,
+                emailsSkipped: skippedCount
+            }
+        });
     } catch (error) {
         console.error('Error en la ejecución principal:', error);
-        res.status(500).send('Error en la ejecución principal: ' + (error instanceof Error ? error.message : String(error)));
+        res.status(500).json({ 
+            message: 'Error en la ejecución principal', 
+            error: (error instanceof Error ? error.message : String(error)) 
+        });
     }
 }
 
