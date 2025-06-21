@@ -7,22 +7,36 @@ import { ExtractedBookingData } from './gemini'; // Usaremos la interfaz que ya 
  * @param dateString Fecha en formato string (puede ser YYYY-MM-DD o cualquier otro formato válido)
  * @returns Fecha formateada como YYYY-MM-DD o null si la fecha no es válida
  */
-function formatDateForAirtable(dateString: string | null | undefined): string | null {
+function formatDateForAirtable(dateString: string | null | undefined, hourString?: string): string | null {
     if (!dateString) return null;
-    
     try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
+        // Asegurarse de que la fecha de entrada es solo YYYY-MM-DD
+        const datePart = dateString.split('T')[0];
+        const [year, month, day] = datePart.split('-').map(Number);
+
+        if (!year || !month || !day) {
+            throw new Error('Formato de fecha inválido. Se esperaba YYYY-MM-DD.');
+        }
+
+        // Construir la fecha en UTC para evitar desfases de zona horaria
+        const utcDate = new Date(Date.UTC(year, month - 1, day));
+
+        if (isNaN(utcDate.getTime())) {
             console.error(`Fecha inválida: ${dateString}`);
             return null;
         }
-        
-        // Asegurarse de que el mes y el día tengan 2 dígitos
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        
-        return `${year}-${month}-${day}`;
+
+        const finalYear = utcDate.getUTCFullYear();
+        const finalMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+        const finalDay = String(utcDate.getUTCDate()).padStart(2, '0');
+
+        let isoString = `${finalYear}-${finalMonth}-${finalDay}`;
+
+        if (hourString) {
+            isoString += `T${hourString}`;
+        }
+
+        return isoString;
     } catch (error) {
         console.error(`Error al formatear la fecha '${dateString}':`, error);
         return null;
@@ -78,8 +92,8 @@ export async function upsertBookingToAirtable(rawData: ExtractedBookingData, con
                 : 'Desconocido',
             'Reservation number': rawData.reservationNumber,
             // Asegurar que las fechas tengan el formato correcto (YYYY-MM-DD)
-            'Arrival': rawData.checkInDate ? formatDateForAirtable(rawData.checkInDate) : null,
-            'Departure Date': rawData.checkOutDate ? formatDateForAirtable(rawData.checkOutDate) : null,
+            'Arrival': formatDateForAirtable(rawData.checkInDate, '15:00:00'), // 3:00 pm
+            'Departure Date': formatDateForAirtable(rawData.checkOutDate, '10:00:00'), // 10:00 am
             // Property field must match existing select options in Airtable exactly
             'Property': (() => {
                 try {

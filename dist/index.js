@@ -118,15 +118,15 @@ async function processEmailsHandler(req, res) {
         const messages = await (0, gmail_1.searchEmails)(query);
         console.log(`Se encontraron ${messages ? messages.length : 0} correos.`);
         const successfulAirtableUpserts = new Set();
-        let processedCount = 0;
-        // skippedCount se calculará al final
+        let processedEmailCount = 0;
+        let skippedCount = 0;
         if (messages && messages.length > 0) {
             for (const messageMeta of messages) {
-                processedCount++;
-                console.log(`--- Procesando correo ${processedCount} de ${messages.length} (ID: ${messageMeta.id}) ---`);
+                processedEmailCount++;
+                console.log(`--- Procesando correo ${processedEmailCount} de ${messages.length} (ID: ${messageMeta.id}) ---`);
                 if (!messageMeta.id) {
-                    console.log('WARN: Se encontró un mensaje sin ID, omitiendo.');
-                    // skippedCount se calculará al final
+                    console.log('[PROCESO] OMITIDO: Se encontró un mensaje sin ID.');
+                    skippedCount++;
                     continue;
                 }
                 const emailContent = await (0, gmail_1.getEmailContent)(messageMeta.id);
@@ -279,24 +279,33 @@ async function processEmailsHandler(req, res) {
                             }
                         }
                         else {
-                            console.log(`No se pudieron extraer datos con Gemini para el mensaje ID: ${messageMeta.id}`);
+                            console.log(`[PROCESO] OMITIDO: No se pudieron extraer datos con Gemini para el mensaje ID: ${messageMeta.id}`);
+                            skippedCount++;
                         }
                     }
                     else {
-                        console.log(`No se pudo obtener el contenido o el cuerpo para el mensaje ID: ${messageMeta.id}`);
+                        console.log(`[PROCESO] OMITIDO: No se pudo obtener el contenido o el cuerpo para el mensaje ID: ${messageMeta.id}`);
+                        skippedCount++;
                     }
                 }
                 else {
-                    console.log(`No se pudo obtener el contenido completo (body) para el mensaje ID: ${messageMeta.id}`);
-                    // skippedCount se calculará al final
+                    console.log(`[PROCESO] OMITIDO: No se pudo obtener el contenido completo (body) para el mensaje ID: ${messageMeta.id}`);
+                    skippedCount++;
                 }
             }
         }
         const totalMessagesFound = messages ? messages.length : 0;
-        const finalSkippedCount = totalMessagesFound - successfulAirtableUpserts.size;
-        const summaryMessage = `Procesamiento completado. ${successfulAirtableUpserts.size} registros únicos creados/actualizados en Airtable, ${finalSkippedCount} correos no resultaron en un upsert único (omitidos/errores/duplicados), de ${totalMessagesFound} correos encontrados.`;
-        console.log(summaryMessage); // También loguear en consola para la ejecución local
-        res.status(200).send(summaryMessage);
+        const processedInAirtableCount = successfulAirtableUpserts.size;
+        const summaryMessage = `
+\n[RESUMEN DE PROCESAMIENTO]
+----------------------------------------
+Correos encontrados en Gmail: ${totalMessagesFound}
+Registros únicos en Airtable (creados/actualizados): ${processedInAirtableCount}
+Correos omitidos (sin cuerpo, sin ID, o sin datos extraíbles): ${skippedCount}
+----------------------------------------
+`;
+        console.log(summaryMessage);
+        res.status(200).send('Procesamiento de correos completado. Revisa los logs para el resumen.');
     }
     catch (error) {
         console.error('Error en la ejecución principal:', error);

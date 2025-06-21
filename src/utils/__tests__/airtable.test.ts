@@ -330,4 +330,44 @@ describe('upsertBookingToAirtable', () => {
       );
     });
   });
+
+  describe('Arrival and Departure Date Formatting', () => {
+    it('debe formatear Arrival con la hora 15:00:00', async () => {
+      const testData: ExtractedBookingData = {
+        ...baseBookingData,
+        checkInDate: '2025-08-15',
+      };
+
+      await upsertBookingToAirtable(testData, mockConfig);
+
+      expect(mockTable.create).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fields: expect.objectContaining({
+              'Arrival': '2025-08-15T15:00:00',
+            }),
+          }),
+        ]),
+      );
+    });
+
+    it('debe formatear Departure Date con la hora 10:00:00', async () => {
+      const testData: ExtractedBookingData = {
+        ...baseBookingData,
+        checkOutDate: '2025-08-22',
+      };
+
+      await upsertBookingToAirtable(testData, mockConfig);
+
+      expect(mockTable.create).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fields: expect.objectContaining({
+              'Departure Date': '2025-08-22T10:00:00',
+            }),
+          }),
+        ]),
+      );
+    });
+  });
 });
