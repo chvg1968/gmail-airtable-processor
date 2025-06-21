@@ -393,3 +393,16 @@ if (require.main === module) {
         process.exit(1);
       });
   }
+
+  //Para ejectuar continuo deploy en Google Cloud:
+
+import express from 'express';
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+app.get('/', processEmailsHandler);
+
+app.listen(PORT, () => {
+  console.log(`Servidor Express escuchando en el puerto ${PORT}`);
+});
