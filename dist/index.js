@@ -216,38 +216,11 @@ Skipped Emails/Reservations: ${skippedCount}
     }
 }
 exports.processEmailsHandler = processEmailsHandler;
-if (require.main === module) {
-    // This block runs when you execute `npm run dev`
-    console.log("<<<<< STARTING LOCAL EXECUTION (npm run dev) >>>>>");
-    const mockReq = {};
-    const mockRes = {
-        status: function (code) {
-            console.log(`[Local Execution] res.status: ${code}`);
-            return this;
-        },
-        json: function (data) {
-            console.log('[Local Execution] res.json:', JSON.stringify(data, null, 2));
-            return this;
-        },
-        send: function (message) {
-            console.log(`[Local Execution] res.send: ${message}`);
-            return this;
-        }
-    };
-    processEmailsHandler(mockReq, mockRes)
-        .then(() => console.log("<<<<< LOCAL EXECUTION COMPLETED >>>>>"))
-        .catch(error => {
-        console.error("<<<<< ERROR IN LOCAL EXECUTION >>>>>", error);
-        process.exit(1);
-    });
-}
-else {
-    // This block runs when imported as a module (e.g., by Google Cloud Run)
-    const express = require('express');
-    const app = express();
-    const PORT = process.env.PORT || 8080;
-    app.get('/', processEmailsHandler);
-    app.listen(PORT, () => {
-        console.log(`Express server listening on port ${PORT}`);
-    });
-}
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 8080;
+app.get('/', processEmailsHandler);
+app.listen(PORT, () => {
+    console.log(`Express server listening on port ${PORT}`);
+});
+// Para pruebas locales con mocks, ejecuta manualmente otro script o descomenta el bloque original si lo necesitas.
