@@ -1,0 +1,32 @@
+{
+  "name": "gmail-airtable-processor",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "deploy": "gcloud functions deploy mail-airtable-processor --trigger-http --runtime nodejs20 --region us-east1 --entry-point processEmailsHandler --allow-unauthenticated --set-env-vars \"AIRTABLE_BASE_ID=app2zC1KWcNeBXjXp,AIRTABLE_TABLE_NAME=Data Test\"",
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google-cloud/secret-manager": "^6.0.1",
+    "@google/generative-ai": "^0.24.1",
+    "airtable": "^0.12.2",
+    "dotenv": "^16.5.0",
+    "express": "^4.19.2",
+    "googleapis": "^150.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^24.0.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.0.3",
+    "typescript": "^4.9.5"
+  }
+}

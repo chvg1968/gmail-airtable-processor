@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1750449247322" clover="3.2.0">
+  <project timestamp="1750449247322" name="All files">
+    <metrics statements="18" coveredstatements="18" conditionals="18" coveredconditionals="16" methods="3" coveredmethods="3" elements="39" coveredelements="37" complexity="0" loc="18" ncloc="18" packages="2" files="2" classes="2"/>
+    <package name="data">
+      <metrics statements="2" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <file name="propertyMappings.ts" path="/Users/cvilla/Desktop/Luxe Tareas/apps/Copias/Copia gmail-airtable-processor/src/data/propertyMappings.ts">
+        <metrics statements="2" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="11" count="1" type="stmt"/>
+        <line num="26" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="utils">
+      <metrics statements="16" coveredstatements="16" conditionals="18" coveredconditionals="16" methods="3" coveredmethods="3"/>
+      <file name="propertyMapping.ts" path="/Users/cvilla/Desktop/Luxe Tareas/apps/Copias/Copia gmail-airtable-processor/src/utils/propertyMapping.ts">
+        <metrics statements="16" coveredstatements="16" conditionals="18" coveredconditionals="16" methods="3" coveredmethods="3"/>
+        <line num="8" count="1" type="stmt"/>
+        <line num="15" count="13" type="cond" truecount="1" falsecount="0"/>
+        <line num="17" count="3" type="cond" truecount="3" falsecount="0"/>
+        <line num="20" count="10" type="stmt"/>
+        <line num="22" count="10" type="cond" truecount="2" falsecount="0"/>
+        <line num="23" count="5" type="cond" truecount="1" falsecount="0"/>
+        <line num="24" count="4" type="stmt"/>
+        <line num="26" count="4" type="stmt"/>
+        <line num="27" count="24" type="stmt"/>
+        <line num="30" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="31" count="5" type="cond" truecount="3" falsecount="0"/>
+        <line num="32" count="4" type="cond" truecount="1" falsecount="0"/>
+        <line num="34" count="3" type="stmt"/>
+        <line num="35" count="14" type="stmt"/>
+        <line num="37" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="41" count="1" type="cond" truecount="1" falsecount="2"/>
+      </file>
+    </package>
+  </project>
+</coverage>
