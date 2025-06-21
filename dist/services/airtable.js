@@ -85,6 +85,10 @@ async function upsertBookingToAirtable(rawData, config, messageId) {
     try {
         const platform = normalizePlatform(rawData.platform?.[0]);
         const propertyName = normalizeProperty(rawData.accommodationName);
+        // Vrbo Review logic: check if either baseCommission or paymentProcessingFee is missing or null/empty/zero
+        const baseCommission = typeof rawData.baseCommissionOrHostFee === 'number' ? rawData.baseCommissionOrHostFee : null;
+        const paymentProcessingFees = typeof rawData.paymentProcessingFee === 'number' ? rawData.paymentProcessingFee : null;
+        const vrboReviewNeeded = platform === 'Vrbo' && (!(baseCommission && paymentProcessingFees));
         const airtableFields = {
             'Full Name': rawData.guestName,
             'Platform': platform,
@@ -135,7 +139,8 @@ async function upsertBookingToAirtable(rawData, config, messageId) {
                     console.error('Error calculating Needs Date Review:', error);
                     return false;
                 }
-            })()
+            })(),
+            'Vrbo Review': vrboReviewNeeded
         };
         for (const key in airtableFields) {
             if (airtableFields[key] === null || airtableFields[key] === undefined) {

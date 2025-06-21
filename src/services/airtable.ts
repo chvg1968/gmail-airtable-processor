@@ -91,6 +91,11 @@ export async function upsertBookingToAirtable(
         const platform = normalizePlatform(rawData.platform?.[0]);
         const propertyName = normalizeProperty(rawData.accommodationName);
 
+        // Vrbo Review logic: check if either baseCommission or paymentProcessingFee is missing or null/empty/zero
+        const baseCommission = typeof rawData.baseCommissionOrHostFee === 'number' ? rawData.baseCommissionOrHostFee : null;
+        const paymentProcessingFees = typeof rawData.paymentProcessingFee === 'number' ? rawData.paymentProcessingFee : null;
+        const vrboReviewNeeded = platform === 'Vrbo' && (!(baseCommission && paymentProcessingFees));
+
         const airtableFields: { [key: string]: any } = {
             'Full Name': rawData.guestName,
             'Platform': platform,
@@ -117,25 +122,26 @@ export async function upsertBookingToAirtable(
                     const checkIn = new Date(rawData.checkInDate);
                     const bookingDate = rawData.bookingDate ? new Date(rawData.bookingDate) : new Date();
                     const days = Math.ceil((checkIn.getTime() - bookingDate.getTime()) / (1000 * 60 * 60 * 24));
-console.log('[Needs Date Review Debug]', {
-  guest: rawData.guestName,
-  reservation: rawData.reservationNumber,
-  checkIn: rawData.checkInDate,
-  bookingDate: rawData.bookingDate,
-  checkInTS: checkIn.getTime(),
-  bookingDateTS: bookingDate.getTime(),
-  days,
-  platform
-});
-if (days < 0) return true; // check-in antes del bookingDate, sospechoso
-if (checkIn.getFullYear() === 2026) return true; // año ajustado
-if (days > 330) return true; // diferencia muy grande
-return false;
+                    console.log('[Needs Date Review Debug]', {
+                        guest: rawData.guestName,
+                        reservation: rawData.reservationNumber,
+                        checkIn: rawData.checkInDate,
+                        bookingDate: rawData.bookingDate,
+                        checkInTS: checkIn.getTime(),
+                        bookingDateTS: bookingDate.getTime(),
+                        days,
+                        platform
+                    });
+                    if (days < 0) return true; // check-in antes del bookingDate, sospechoso
+                    if (checkIn.getFullYear() === 2026) return true; // año ajustado
+                    if (days > 330) return true; // diferencia muy grande
+                    return false;
                 } catch (error) {
                     console.error('Error calculating Needs Date Review:', error);
                     return false;
                 }
-            })()
+            })(),
+            'Vrbo Review': vrboReviewNeeded
         };
 
         for (const key in airtableFields) {
