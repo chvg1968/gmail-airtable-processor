@@ -39,19 +39,32 @@ function getHeader(headers, name) {
     return header ? header.value || null : null;
 }
 function getBody(payload) {
-    if (payload.body?.data) {
-        return Buffer.from(payload.body.data, 'base64').toString('utf-8');
-    }
-    if (payload.parts) {
-        for (const part of payload.parts) {
-            if (part.mimeType === 'text/plain' && part.body?.data) {
-                return Buffer.from(part.body.data, 'base64').toString('utf-8');
-            }
+    let plainText = '';
+    let htmlText = '';
+    const stack = [payload];
+    while (stack.length > 0) {
+        const part = stack.pop();
+        if (!part)
+            continue;
+        // If a part is a container, push its children to the stack and process them next.
+        // This handles multipart/* and message/rfc822 (forwarded emails).
+        if (part.parts) {
+            stack.push(...part.parts);
+            continue; // We only process leaf nodes for content.
         }
-        // Fallback to the first part if no text/plain is found
-        return getBody(payload.parts[0]);
+        // Process leaf nodes for content.
+        if (part.mimeType === 'text/plain' && part.body?.data) {
+            plainText += Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
+        else if (part.mimeType === 'text/html' && part.body?.data) {
+            htmlText += Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
+        else if (part.body?.data) { // Fallback for parts with data but no explicit text mimeType
+            plainText += Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
     }
-    return '';
+    // Prioritize plain text, but fall back to HTML if plain text is empty.
+    return plainText.trim() ? plainText : htmlText;
 }
 async function getEmailContent(messageId) {
     try {
@@ -66,34 +79,14 @@ async function getEmailContent(messageId) {
             return null;
         }
         const headers = message.payload.headers;
-        const subjectHeader = getHeader(headers, 'Subject');
-        const fromHeader = getHeader(headers, 'From');
         const bodyData = getBody(message.payload);
-        const isForwarded = subjectHeader ? subjectHeader.toLowerCase().startsWith('fwd:') || subjectHeader.toLowerCase().startsWith('reenv:') : false;
-        let forwardedContent = null;
-        if (isForwarded) {
-            const forwardedMatch = bodyData.match(/(?:---------- Forwarded message ---------|---------- Mensaje reenviado ---------)([\s\S]*)/i);
-            if (forwardedMatch && forwardedMatch[1]) {
-                const forwardedText = forwardedMatch[1];
-                const fromMatch = forwardedText.match(/From: ([\s\S]*?)\n/i);
-                const forwardedFrom = fromMatch ? fromMatch[1].trim() : null;
-                const bodyStartIndex = forwardedText.indexOf('\n\n');
-                const forwardedBody = bodyStartIndex !== -1 ? forwardedText.substring(bodyStartIndex + 2).trim() : forwardedText.trim();
-                forwardedContent = {
-                    from: forwardedFrom,
-                    body: forwardedBody,
-                };
-            }
-        }
         return {
             id: messageId,
             threadId: message.threadId || '',
-            subject: subjectHeader,
-            from: fromHeader,
+            subject: getHeader(headers, 'Subject'),
+            from: getHeader(headers, 'From'),
             date: getHeader(headers, 'Date'),
             body: bodyData,
-            isForwarded,
-            forwardedContent,
             internalDate: message.internalDate || '',
         };
     }

@@ -1,5 +1,5 @@
 import { getInitializedConfig, AppConfig } from './config';
-// Define GmailMessageMeta locally as it's not explicitly exported from gmail.ts with that name
+// Define GmailMessageMeta locally
 interface GmailMessageMeta {
     id: string;
     threadId: string;
@@ -7,7 +7,7 @@ interface GmailMessageMeta {
 import { getGmailProfile, searchEmails, getEmailContent, EmailContent } from './services/gmail';
 import { extractBookingInfoFromEmail, ExtractedBookingData } from './services/gemini';
 import { vrboPropertyMappings as Vrbo_properties, airbnbPropertyMappings as Airbnb_properties, AirbnbProperty, VrboProperty } from './data/propertyMappings';
-import { upsertBookingToAirtable } from './services/airtable';
+import { upsertBookingToAirtable, isMessageProcessed } from './services/airtable';
 
 function toTitleCase(str: string | null | undefined): string | null | undefined {
   if (!str) return str;
@@ -16,7 +16,7 @@ function toTitleCase(str: string | null | undefined): string | null | undefined 
 
 import type { Request, Response } from 'express';
 
-// --- INICIO: Bloque de extracción con RegEx para tarifas ---
+// --- Bloques de utilidades (sin cambios) ---
 const extractFee = (text: string, regex: RegExp): number | null => {
     const match = text.match(regex);
     if (match && match[1]) {
@@ -25,384 +25,233 @@ const extractFee = (text: string, regex: RegExp): number | null => {
     }
     return null;
 };
-
 const extractPaymentProcessingFee = (text: string, regex: RegExp): number | 'TBD' | null => {
     const match = text.match(regex);
     if (match && match[1]) {
         const value = match[1].trim();
-        if (value.toUpperCase() === 'TBD') {
-            return 'TBD';
-        }
+        if (value.toUpperCase() === 'TBD') return 'TBD';
         return parseFloat(value.replace(/,/g, ''));
     }
     return null;
 };
-
 const airbnbHostFeeRegex = /Host service fee \(3\.0%\)[\s\S]*?-\$([\d,]+\.\d{2})/;
 const vrboBaseCommissionRegex = /Base commission[\s\S]*?\$([\d,]+\.\d{2})/;
 const vrboPaymentProcessingFeeRegex = /Payment processing fees\*[\s\S]*?\$?([\d,]+\.\d{2}|TBD)/;
-// --- FIN: Bloque de extracción con RegEx para tarifas ---
-
-// --- INICIO: Lógica de mapeo de propiedades ---
-function findPropertyMapping(
-    platformFromGemini: string | null,
-    accommodationNameFromGemini: string | null, // Corrected: Was propertyNameFromGemini, now maps to ExtractedBookingData.accommodationName
-    propertyCodeVrboFromGemini: string | null 
-): string | null {
+function findPropertyMapping(platformFromGemini: string | null, accommodationNameFromGemini: string | null, propertyCodeVrboFromGemini: string | null): string | null {
     if (platformFromGemini && (platformFromGemini.toLowerCase() === 'vrbo' || platformFromGemini.toLowerCase() === 'homeaway')) {
-        console.log(`DEBUG findPropertyMapping: Received propertyCodeVrboFromGemini: '${propertyCodeVrboFromGemini}' for platform: ${platformFromGemini}`);
         if (propertyCodeVrboFromGemini) {
-            const codeToSearch = propertyCodeVrboFromGemini.replace(/^#/, '').toLowerCase(); // Eliminar # y asegurar minúsculas
+            const codeToSearch = propertyCodeVrboFromGemini.replace(/^#/, '').toLowerCase();
             const property = Vrbo_properties.find((p: VrboProperty) => p.code.toLowerCase() === codeToSearch);
-            if (property) {
-                console.log(`DEBUG findPropertyMapping: Vrbo mapping found: Code '${propertyCodeVrboFromGemini}' maps to Name '${property.name}'`);
-                console.log(`DEBUG findPropertyMapping: EXITING with Vrbo Name: '${property.name}'`);
-                return property.name;
-            } else {
-                console.log(`DEBUG findPropertyMapping: Vrbo mapping NOT found for Code '${propertyCodeVrboFromGemini}' in Vrbo_properties list.`);
-                console.log(`DEBUG findPropertyMapping: EXITING with null (Vrbo property not found by code)`);
-                return null;
-            }
-        } else {
-            console.log(`DEBUG findPropertyMapping: propertyCodeVrboFromGemini is null or undefined for Vrbo/Homeaway platform.`);
-            console.log(`DEBUG findPropertyMapping: EXITING with null (Vrbo code was null)`);
-            return null;
+            return property ? property.name : null;
         }
+        return null;
     }
     if (!platformFromGemini) return null;
-
     const platform = platformFromGemini.toLowerCase();
-
     if (platform === 'airbnb') {
-        console.log(`DEBUG findPropertyMapping: Received accommodationNameFromGemini: '${accommodationNameFromGemini}' for platform: Airbnb`);
-        if (!accommodationNameFromGemini) {
-            console.log(`DEBUG findPropertyMapping: accommodationNameFromGemini is null. EXITING with null.`);
-            return null;
-        }
+        if (!accommodationNameFromGemini) return null;
         const nameToSearch = accommodationNameFromGemini.toLowerCase();
-        const found: AirbnbProperty | undefined = Airbnb_properties.find(
-            (p: AirbnbProperty) => nameToSearch.includes(p.alias.toLowerCase())
-        );
-
-        if (found) {
-            console.log(`DEBUG findPropertyMapping: Airbnb mapping found: Name '${accommodationNameFromGemini}' includes alias '${found.alias}'. Returning mapped name '${found.name}'`);
-        } else {
-            console.log(`DEBUG findPropertyMapping: No Airbnb mapping found for '${accommodationNameFromGemini}'`);
-        }
+        const found: AirbnbProperty | undefined = Airbnb_properties.find((p: AirbnbProperty) => nameToSearch.includes(p.alias.toLowerCase()));
         return found ? found.name : null;
-    } else if (platform === 'vrbo' || platform === 'homeaway') {
-        if (!propertyCodeVrboFromGemini) return null;
-        const codeToSearch = propertyCodeVrboFromGemini.toLowerCase();
-        // Corrected: VrboProperty uses 'code' for matching and 'name' for the value to return
-        const found: VrboProperty | undefined = Vrbo_properties.find(
-            (p: VrboProperty) => p.code.toLowerCase() === codeToSearch
-        );
-        return found ? found.name : null; // Corrected: Return p.name as per VrboProperty interface
     }
     return null;
 }
-// --- FIN: Lógica de mapeo de propiedades ---
 
+// --- Handler Principal Refactorizado ---
 export async function processEmailsHandler(req: Request, res: Response) {
     let config: AppConfig;
     try {
         config = await getInitializedConfig();
     } catch (error) {
-        console.error('Error al inicializar la configuración:', error);
-        res.status(500).send('Error al inicializar la configuración: ' + (error instanceof Error ? error.message : String(error)));
+        console.error('Error initializing config:', error);
+        res.status(500).send('Error initializing config: ' + (error instanceof Error ? error.message : String(error)));
         return;
     }
 
-    console.log('¡Hola desde el procesador de correos Gmail-Airtable!');
+    console.log('Starting Gmail-Airtable email processor...');
 
     try {
-        console.log('Intentando conectar a Gmail...');
         await getGmailProfile();
-        console.log('Conexión a Gmail exitosa.');
+        console.log('Gmail connection successful.');
 
-        // Calcula la fecha de hace ~48 horas para la búsqueda de correos para darnos un margen de seguridad
+        const now = new Date();
         const fortyEightHoursAgo = new Date();
         fortyEightHoursAgo.setDate(fortyEightHoursAgo.getDate() - 2);
-        const year = fortyEightHoursAgo.getFullYear();
-        const month = (fortyEightHoursAgo.getMonth() + 1).toString().padStart(2, '0');
-        const day = fortyEightHoursAgo.getDate().toString().padStart(2, '0');
-        const searchSinceDateString = `${year}/${month}/${day}`; // Formato YYYY/MM/DD
-
-        console.log(`INFO: Buscando correos desde ${searchSinceDateString} (últimas ~48 horas)`);
-
+        const searchSinceDateString = `${fortyEightHoursAgo.getFullYear()}/${String(fortyEightHoursAgo.getMonth() + 1).padStart(2, '0')}/${String(fortyEightHoursAgo.getDate()).padStart(2, '0')}`;
+        
+        console.log(`Searching emails since ${searchSinceDateString}`);
         const query = `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
-        console.log(`Buscando correos con query: ${query}`);
         const messages: GmailMessageMeta[] = await searchEmails(query) as GmailMessageMeta[];
-        console.log(`Se encontraron ${messages ? messages.length : 0} correos.`);
+        console.log(`Found ${messages ? messages.length : 0} emails.`);
 
-        const successfulAirtableUpserts = new Set<string>();
-        let processedEmailCount = 0;
+        const processedReservations = new Set<string>();
         let skippedCount = 0;
+        let processedInAirtableCount = 0;
 
-        if (messages && messages.length > 0) {
+        if (!messages || messages.length === 0) {
+            console.log("No new emails to process.");
+        } else {
             for (const messageMeta of messages) {
-                processedEmailCount++;
-                console.log(`--- Procesando correo ${processedEmailCount} de ${messages.length} (ID: ${messageMeta.id}) ---`);
-                
-                if (!messageMeta.id) {
-                    console.log('[PROCESO] OMITIDO: Se encontró un mensaje sin ID.');
+                const messageId = messageMeta.id;
+                console.log(`--- Processing email (ID: ${messageId}) ---`);
+
+                if (!messageId) {
+                    console.log('⚠️ SKIPPED: Message found without an ID.');
                     skippedCount++;
                     continue;
                 }
-                const emailContent: EmailContent | null = await getEmailContent(messageMeta.id);
 
-                if (emailContent && emailContent.body) {
-                    let originalFrom = emailContent.from || 'desconocido';
-                    const emailMatch = originalFrom.match(/<([^>]+)>/);
-                    if (emailMatch && emailMatch[1]) {
-                        originalFrom = emailMatch[1];
-                    }
+                if (await isMessageProcessed(messageId, config)) {
+                    console.log(`📬 SKIPPED: Email already processed (messageId=${messageId}).`);
+                    skippedCount++;
+                    continue;
+                }
 
-                    let originalBody = emailContent.body;
+                const emailContent = await getEmailContent(messageId);
+                if (!emailContent || !emailContent.body) {
+                    console.log(`⚠️ SKIPPED: Could not retrieve full content for message ID: ${messageId}`);
+                    skippedCount++;
+                    continue;
+                }
 
-                    // --- INICIO: Lógica mejorada para correos reenviados ---
-                    let isForwarded = false;
-                    let headerEndPosition = -1;
+                const originalBody = emailContent.body;
 
-                    if (originalBody.startsWith('---------- Forwarded message ---------')) {
-                        isForwarded = true;
-                        // El final de las cabeceras es el doble <br>
-                        headerEndPosition = originalBody.indexOf('<br><br>');
-                    } else if (originalBody.startsWith('Begin forwarded message:')) {
-                        isForwarded = true;
-                        // El final de las cabeceras es la línea Reply-To:
-                        const replyToPosition = originalBody.indexOf('Reply-To:');
-                        if (replyToPosition > -1) {
-                            const endOfLine = originalBody.indexOf('<br>', replyToPosition);
-                            headerEndPosition = endOfLine > -1 ? endOfLine : -1;
+                // Helper function to clean forwarded email headers and noise.
+                const cleanForwardedBody = (body: string): string => {
+                    const forwardMarker = '---------- Forwarded message ---------';
+                    const markerIndex = body.lastIndexOf(forwardMarker);
+
+                    if (markerIndex !== -1) {
+                        // Find the end of the header block for the last forwarded message
+                        const headerEndIndex = body.indexOf('\n\n', markerIndex);
+                        if (headerEndIndex !== -1) {
+                            return body.substring(headerEndIndex).trim();
                         }
                     }
+                    return body; // Return original body if not a forwarded email
+                };
 
-                    if (isForwarded && headerEndPosition > -1) {
-                        console.log('INFO: Correo reenviado detectado. Extrayendo contenido original...');
-                        const headerBlock = originalBody.substring(0, headerEndPosition);
-                        
-                        const fromHeaderMatchInForward = headerBlock.match(/From:\s*.*<([^>]+)>/);
-                        if (fromHeaderMatchInForward && fromHeaderMatchInForward[1]) {
-                            originalFrom = fromHeaderMatchInForward[1].trim();
-                        }
-                        console.log(`INFO: Contenido original extraído. Remitente (posiblemente reenviado) limpio: ${originalFrom}`);
-                        
-                        originalBody = originalBody.substring(headerEndPosition).replace(/^(<br>\s*)+/, '');
-                    }
-                    // --- FIN: Lógica mejorada para correos reenviados ---
+                const cleanedBody = cleanForwardedBody(originalBody);
 
-                    if (originalBody) {
-                        const currentYear = new Date().getFullYear();
-                        console.log('Enviando texto a Gemini para extracción...');
-                        let extractedData: ExtractedBookingData | null = await extractBookingInfoFromEmail(originalBody, config.geminiApiKey, currentYear);
-                        // console.log(`DEBUG: Raw extracted data from Gemini for message ${message.id}:`, JSON.stringify(extractedData, null, 2)); // Corrected and temporarily commented out
-                        console.log('Respuesta JSON de Gemini recibida.');
+                const extractedData = await extractBookingInfoFromEmail(cleanedBody, config.geminiApiKey, new Date().getFullYear());
 
-                        if (extractedData && extractedData.error) {
-                            console.log(`INFO: Gemini omitió el correo: ${extractedData.error}`);
-                            extractedData = null;
-                        }
+                if (!extractedData || !extractedData.reservationNumber) {
+                    console.log(`⚠️ SKIPPED: Could not extract reservation number from messageId=${messageId}.`);
+                    skippedCount++;
+                    continue;
+                }
 
-                        if (extractedData && extractedData.reservationNumber) {
-                            // Fallback for Booking Date for Vrbo using email's internalDate
-                            if (emailContent && (!extractedData.bookingDate || extractedData.bookingDate.trim() === '') && 
-                                extractedData.platform && (extractedData.platform.includes('Vrbo') || extractedData.platform.includes('HomeAway'))) {
-                                if (emailContent.internalDate) {
-                                    const dateFromTimestamp = new Date(parseInt(emailContent.internalDate, 10));
-                                    extractedData.bookingDate = dateFromTimestamp.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-                                    console.log(`INFO: Using email reception date (${extractedData.bookingDate}) as Booking Date for Vrbo reservation ${extractedData.reservationNumber}`);
-                                }
-                            }
+                // --- AJUSTE DE AÑO EN CHECKIN PARA AIRBNB ---
+                const platformStr = Array.isArray(extractedData.platform)
+                  ? extractedData.platform[0]
+                  : extractedData.platform;
+                if (
+                  platformStr &&
+                  typeof platformStr === 'string' &&
+                  platformStr.toLowerCase() === 'airbnb' &&
+                  extractedData.checkInDate &&
+                  extractedData.bookingDate
+                ) {
+                  // Si checkInDate no tiene año explícito (formato YYYY-MM-DD vs MM-DD)
+                  if (!/\d{4}/.test(extractedData.checkInDate)) {
+                    const { adjustArrivalYear } = await import('./utils/adjustArrivalYear');
+                    extractedData.checkInDate = adjustArrivalYear(extractedData.checkInDate, extractedData.bookingDate);
+                  }
+                }
 
-                            let extractedBaseOrHostFee: number | null = 0;
-                            let extractedPaymentProcessingFee: number | 'TBD' | null = 0;
+                const platform = extractedData.platform?.[0] || 'Desconocido';
+                const reservationKey = `${extractedData.reservationNumber}::${platform}`;
 
-                            if (extractedData.platform && extractedData.platform.length > 0) {
-                                const platform = extractedData.platform[0].toLowerCase();
-                                console.log(`DEBUG: Plataforma detectada por Gemini: ${platform}. Buscando tarifas...`);
-                                if (platform === 'airbnb') {
-                                    extractedBaseOrHostFee = extractFee(originalBody, airbnbHostFeeRegex) ?? 0;
-                                    console.log(`DEBUG: \"Host service fee\" de Airbnb extraído: ${extractedBaseOrHostFee}`);
-                                } else if (platform === 'vrbo' || platform === 'homeaway') {
-                                    extractedBaseOrHostFee = extractFee(originalBody, vrboBaseCommissionRegex) ?? 0;
-                                    console.log(`DEBUG: \"Base commission\" de Vrbo extraída: ${extractedBaseOrHostFee}`);
-                                    extractedPaymentProcessingFee = extractPaymentProcessingFee(originalBody, vrboPaymentProcessingFeeRegex) ?? 0;
-                                    console.log(`DEBUG: \"Payment processing fees\" de Vrbo extraído: ${extractedPaymentProcessingFee}`);
-                                }
-                            } else {
-                                console.log('DEBUG: Gemini no detectó una plataforma, no se pueden extraer tarifas adicionales.');
-                            }
+                if (processedReservations.has(reservationKey)) {
+                    console.log(`🔁 SKIPPED: Duplicate reservation detected in this run: ${reservationKey}.`);
+                    skippedCount++;
+                    continue;
+                }
+                processedReservations.add(reservationKey);
 
-                            // Corrected: Use extractedData.accommodationName for the property name from Gemini
-                            const propertyMapping = findPropertyMapping(
-                                (extractedData.platform && extractedData.platform.length > 0) ? extractedData.platform[0] : null,
-                                extractedData.accommodationName || null, // Forcing type for persistent error
-                                extractedData.propertyCodeVrbo || null
-                            );
-                            
-                            const guestNameToSave = toTitleCase(extractedData.guestName);
+                // --- Enriquecimiento de datos (Tarifas, Fechas, etc.) ---
+                const platformLower = platform.toLowerCase();
+                extractedData.baseCommissionOrHostFee = platformLower === 'airbnb' ? extractFee(originalBody, airbnbHostFeeRegex) : extractFee(originalBody, vrboBaseCommissionRegex);
+                extractedData.paymentProcessingFee = platformLower.startsWith('vrbo') ? extractPaymentProcessingFee(originalBody, vrboPaymentProcessingFeeRegex) : 0;
+                
+                const propertyMapping = findPropertyMapping(platform, extractedData.accommodationName ?? null, extractedData.propertyCodeVrbo ?? null);
+                
+                const dataForAirtable: ExtractedBookingData = {
+                    ...extractedData,
+                    guestName: toTitleCase(extractedData.guestName),
+                    accommodationName: propertyMapping || extractedData.accommodationName,
+                };
 
-                            let finalCheckInDate = extractedData.checkInDate;
-                            let finalCheckOutDate = extractedData.checkOutDate;
-                            let needsDateReview = false;
-
-                            if (extractedData.platform && extractedData.platform[0]?.toLowerCase() === 'airbnb' && extractedData.checkInDate && emailContent.internalDate) {
-                                const emailReceivedDate = new Date(parseInt(emailContent.internalDate, 10));
-                                emailReceivedDate.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparar solo fechas
-
-                                const checkInParts = extractedData.checkInDate.split('-'); // YYYY-MM-DD
-                                const checkInMonth = parseInt(checkInParts[1], 10) -1; // Meses son 0-indexados
-                                const checkInDay = parseInt(checkInParts[2], 10);
-
-                                const emailYear = emailReceivedDate.getFullYear();
-
-                                let candidate1CheckIn = new Date(emailYear, checkInMonth, checkInDay);
-                                let candidate2CheckIn = new Date(emailYear + 1, checkInMonth, checkInDay);
-
-                                let chosenCheckInDate: Date;
-
-                                if (candidate1CheckIn >= emailReceivedDate) {
-                                    chosenCheckInDate = candidate1CheckIn;
-                                } else {
-                                    chosenCheckInDate = candidate2CheckIn;
-                                }
-
-                                // Actualizar extractedData con el año correcto para checkIn y checkOut
-                                const chosenYear = chosenCheckInDate.getFullYear();
-                                finalCheckInDate = `${chosenYear}-${(checkInMonth + 1).toString().padStart(2, '0')}-${checkInDay.toString().padStart(2, '0')}`;
-                                
-                                if (extractedData.checkOutDate) {
-                                    const checkOutParts = extractedData.checkOutDate.split('-');
-                                    finalCheckOutDate = `${chosenYear}-${checkOutParts[1]}-${checkOutParts[2]}`;
-                                    // Ajuste para checkouts que cruzan al siguiente año (ej. check-in Dic, check-out Ene)
-                                    const tempFinalCheckOut = new Date(chosenYear, parseInt(checkOutParts[1],10)-1, parseInt(checkOutParts[2],10));
-                                    if (tempFinalCheckOut < chosenCheckInDate) { // Si checkout es anterior a checkin, significa que es del año siguiente
-                                        finalCheckOutDate = `${chosenYear + 1}-${checkOutParts[1]}-${checkOutParts[2]}`;
-                                    }
-                                }
-                                extractedData.checkInDate = finalCheckInDate;
-                                extractedData.checkOutDate = finalCheckOutDate;
-
-                                // Detección del caso límite (más de ~11 meses en el futuro)
-                                const diffTime = Math.abs(chosenCheckInDate.getTime() - emailReceivedDate.getTime());
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                if (diffDays > 330) {
-                                    console.log(`INFO: Caso límite detectado para Airbnb. Reserva ${extractedData.reservationNumber} con check-in ${finalCheckInDate} recibida el ${emailReceivedDate.toISOString().split('T')[0]}. Marcando para revisión.`);
-                                    needsDateReview = true;
-                                }
-                            }
-
-                            // Append specific times for Airtable
-                            if (extractedData.checkInDate && !extractedData.checkInDate.includes('T')) {
-                                extractedData.checkInDate += "T15:00:00.000Z";
-                            }
-                            if (extractedData.checkOutDate && !extractedData.checkOutDate.includes('T')) {
-                                extractedData.checkOutDate += "T10:00:00.000Z";
-                            }
-
-                            // Sumar clubFee a accommodationPrice si existe
-                            if (typeof extractedData.clubFee === 'number') {
-                                extractedData.accommodationPrice = (extractedData.accommodationPrice || 0) + extractedData.clubFee;
-                            }
-
-                            const dataForAirtable: ExtractedBookingData & { NeedsDateReview?: boolean } = {
-                                ...extractedData,
-                                guestName: guestNameToSave,
-                                accommodationName: propertyMapping || extractedData.accommodationName,
-                                baseCommissionOrHostFee: extractedBaseOrHostFee,
-                                paymentProcessingFee: extractedPaymentProcessingFee,
-                                NeedsDateReview: needsDateReview,
-                            };
-
-                            const success = await upsertBookingToAirtable(dataForAirtable, config);
-                            if (success && extractedData.reservationNumber) {
-                                successfulAirtableUpserts.add(extractedData.reservationNumber);
-                            } else {
-                                // Si success es false, upsertBookingToAirtable ya habrá logueado un error
-                                // o es un caso donde no se pudo determinar el reservationNumber antes de llamar a upsert.
-                                // skippedCount se calculará al final
-                            }
-                        } else {
-                            console.log(`[PROCESO] OMITIDO: No se pudieron extraer datos con Gemini para el mensaje ID: ${messageMeta.id}`);
-                            skippedCount++;
-                        }
-                    } else {
-                        console.log(`[PROCESO] OMITIDO: No se pudo obtener el contenido o el cuerpo para el mensaje ID: ${messageMeta.id}`);
-                        skippedCount++;
-                    }
+                const success = await upsertBookingToAirtable(dataForAirtable, config, messageId);
+                if (success) {
+                    processedInAirtableCount++;
                 } else {
-                     console.log(`[PROCESO] OMITIDO: No se pudo obtener el contenido completo (body) para el mensaje ID: ${messageMeta.id}`);
-                     skippedCount++;
+                    skippedCount++;
                 }
             }
-        }
+            }
 
-        const totalMessagesFound = messages ? messages.length : 0;
-        const processedInAirtableCount = successfulAirtableUpserts.size;
-
-        const summaryLog = `
-\n[RESUMEN DE PROCESAMIENTO]
+            const summaryLog = `
+[PROCESSING SUMMARY]
 ----------------------------------------
-Correos encontrados en Gmail: ${totalMessagesFound}
-Registros únicos en Airtable (creados/actualizados): ${processedInAirtableCount}
-Correos omitidos (sin cuerpo, sin ID, o sin datos extraíbles): ${skippedCount}
+Emails Found: ${messages?.length || 0}
+Reservations Processed in Airtable: ${processedInAirtableCount}
+Skipped Emails/Reservations: ${skippedCount}
 ----------------------------------------
 `;
+            console.log(summaryLog);
 
-        console.log(summaryLog); // Mantener el log detallado en la consola
-
-        // Enviar una respuesta JSON estructurada
-        res.status(200).json({
-            message: "Procesamiento de correos completado.",
+            res.status(200).json({
+            message: "Email processing completed.",
             details: {
-                emailsFound: totalMessagesFound,
-                recordsUpserted: processedInAirtableCount,
-                emailsSkipped: skippedCount
+            emailsFound: messages?.length || 0,
+            recordsUpserted: processedInAirtableCount,
+            emailsSkipped: skippedCount
             }
-        });
+            });
     } catch (error) {
-        console.error('Error en la ejecución principal:', error);
+        console.error('Error in main execution:', error);
         res.status(500).json({ 
-            message: 'Error en la ejecución principal', 
+            message: 'Error in main execution', 
             error: (error instanceof Error ? error.message : String(error)) 
         });
     }
 }
 
 if (require.main === module) {
-    console.log("<<<<< INICIANDO EJECUCIÓN LOCAL (npm run dev) >>>>>");
-  
+    // This block runs when you execute `npm run dev`
+    console.log("<<<<< STARTING LOCAL EXECUTION (npm run dev) >>>>>");
     const mockReq = {} as Request;
     const mockRes = {
-      status: (code: number) => {
+      status: function(code: number) {
         console.log(`[Local Execution] res.status: ${code}`);
-        return {
-          send: (message: string) => { /* El mensaje ya se loguea explícitamente */ }
-        };
+        return this;
       },
-      send: (message: string) => { /* El mensaje ya se loguea explícitamente */ }
+      json: function(data: any) {
+        console.log('[Local Execution] res.json:', JSON.stringify(data, null, 2));
+        return this;
+      },
+      send: function(message: string) {
+        console.log(`[Local Execution] res.send: ${message}`);
+        return this;
+      }
     } as Response;
   
     processEmailsHandler(mockReq, mockRes)
-      .then(() => {
-        console.log("<<<<< EJECUCIÓN LOCAL COMPLETADA (npm run dev) >>>>>");
-      })
+      .then(() => console.log("<<<<< LOCAL EXECUTION COMPLETED >>>>>"))
       .catch(error => {
-        console.error("<<<<< ERROR EN EJECUCIÓN LOCAL (npm run dev) >>>>>", error);
+        console.error("<<<<< ERROR IN LOCAL EXECUTION >>>>>", error);
         process.exit(1);
       });
-  }
+} else {
+    // This block runs when imported as a module (e.g., by Google Cloud Run)
+    const express = require('express');
+    const app = express();
+    const PORT = process.env.PORT || 8080;
 
-  //Para ejectuar continuo deploy en Google Cloud:
+    app.get('/', processEmailsHandler);
 
-import express from 'express';
-
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-app.get('/', processEmailsHandler);
-
-app.listen(PORT, () => {
-  console.log(`Servidor Express escuchando en el puerto ${PORT}`);
-});
+    app.listen(PORT, () => {
+      console.log(`Express server listening on port ${PORT}`);
+    });
+}

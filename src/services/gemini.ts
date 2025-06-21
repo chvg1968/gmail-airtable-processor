@@ -53,7 +53,7 @@ const safetySettings = [
     { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
-function buildPrompt(emailBody: string, referenceYear: number): string {
+export function buildPrompt(emailBody: string, referenceYear: number): string {
     return `
     Analyze the following email content to extract booking details. The current year is ${referenceYear} for context, which should be used for any dates where the year is not specified.
 
@@ -70,10 +70,10 @@ function buildPrompt(emailBody: string, referenceYear: number): string {
     - checkOutDate: The departure date in YYYY-MM-DD format.
     - accommodationName: The full address or name of the property. For Airbnb, try to extract the text that comes after the last hyphen in the property line (e.g., from "Reservation at Villa Palacio - Tainos", extract "Tainos"). For Vrbo, extract the textual property name (e.g., "Villa Clara", "Ocean Grace Villa").
     - propertyCodeVrbo: The unique property identifier code for Vrbo bookings, often found near the property name or details (e.g., "3456633", "4574967"). This is NOT the reservation ID (like HA-XXXXXX). Null for other platforms.
-    - accommodationPrice: The base price for the stay, before any fees or taxes. Look for patterns like 'X nights $Y' or similar pricing lines.
+    - accommodationPrice: The total price for the entire stay, before any fees or taxes. For Airbnb, if you see a pattern like '$X.XX x N nights' or 'Accommodation: $X.XX x N nights', multiply to get the total (e.g., $894.00 x 4 nights = $3,576.00). If both total and per-night prices are present, always return the total. If only per-night and number of nights are present, multiply them.
     - adults: The number of adults.
     - children: The number of children.
-    - bookingDate: The date the reservation was made, in YYYY-MM-DD format.
+    - bookingDate: The date when the booking confirmation email was originally sent by Airbnb. If the email is a forward, search for a header block that starts with '---------- Forwarded message ---------' and extract the line starting with 'Date:' (e.g., 'Date: Wed, May 21, 2025 at 2:56 PM'). Use this as the bookingDate in YYYY-MM-DD format. If not found, use the oldest date present in the email body. Prioritize the original Airbnb header date over any forward date or processing date.
     - discountAmount: Any discount applied.
     - cleaningFee: The cleaning fee.
     - guestServiceFee: The service fee charged to the guest.
@@ -89,6 +89,7 @@ function buildPrompt(emailBody: string, referenceYear: number): string {
     3.  All monetary values should be numbers, without currency symbols or commas, except for 'paymentProcessingFee' which can be the string 'TBD'.
     4.  If a field is not found, its value should be null.
     5.  The 'platform' field must always be an array containing a single string.
+    Return the extracted fields as a flat JSON object. If any field is missing, set it to null or an empty string.
     `;
 }
 
@@ -117,6 +118,31 @@ export async function extractBookingInfoFromEmail(
         if (responseText) {
             console.log('Respuesta JSON de Gemini recibida.');
             const jsonData = JSON.parse(responseText) as ExtractedBookingData;
+
+            // --- Fallback: calcular total si Gemini solo devuelve nightly rate y noches ---
+            // Vrbo: sumar Club a accommodationPrice si ambos existen
+            if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'vrbo') {
+                if (typeof jsonData.accommodationPrice === 'number' && typeof jsonData.clubFee === 'number') {
+                    jsonData.accommodationPrice += jsonData.clubFee;
+                }
+            }
+
+            if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'airbnb') {
+                // Buscar patrón de nightly rate y noches en el cuerpo del email
+                const nightsMatch = emailBody.match(/(\d+)\s+nights?/i);
+                const nightlyRateMatch = emailBody.match(/\$([\d,]+(?:\.\d{2})?)\s*(?:x|×)\s*\d+\s+nights?/i);
+                if (nightsMatch && nightlyRateMatch) {
+                    const nights = parseInt(nightsMatch[1], 10);
+                    const nightlyRate = parseFloat(nightlyRateMatch[1].replace(/,/g, ''));
+                    const calculatedTotal = nightlyRate * nights;
+                    if (
+                        (!jsonData.accommodationPrice || Math.abs(jsonData.accommodationPrice - nightlyRate) < 1) &&
+                        calculatedTotal > 0
+                    ) {
+                        jsonData.accommodationPrice = calculatedTotal;
+                    }
+                }
+            }
             
             if (jsonData.error) {
                 return jsonData;

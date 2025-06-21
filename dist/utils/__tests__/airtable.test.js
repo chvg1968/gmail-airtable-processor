@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // Mock table object with Airtable-like methods
+const mockFirstPage = jest.fn();
+const mockSelect = jest.fn().mockReturnValue({ firstPage: mockFirstPage });
 const mockTable = {
     create: jest.fn(),
     update: jest.fn(),
-    select: jest.fn().mockReturnValue({ firstPage: jest.fn() }),
+    select: mockSelect,
 };
 // mockBase is a function that returns mockTable (simula base('tableName'))
 const mockBase = jest.fn(() => mockTable);
@@ -40,6 +42,8 @@ beforeAll(() => {
 // Configurar los mocks para las pruebas
 beforeEach(() => {
     jest.clearAllMocks();
+    // Comportamiento por defecto: no se encuentra ningún registro, por lo que se debe llamar a 'create'.
+    mockFirstPage.mockResolvedValue([]);
 });
 // Mock de los mapeos de propiedades
 jest.mock('../../data/propertyMappings', () => ({
@@ -85,7 +89,7 @@ describe('upsertBookingToAirtable', () => {
                 bookingDate: '2025-06-20',
                 checkInDate: '2025-07-13', // 23 días después, año explícito
             };
-            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig);
+            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
             expect(mockTable.create).toHaveBeenCalledWith(expect.arrayContaining([
                 expect.objectContaining({
                     fields: expect.objectContaining({
@@ -101,7 +105,7 @@ describe('upsertBookingToAirtable', () => {
                 bookingDate: '2024-01-01',
                 checkInDate: '2025-12-01',
             };
-            const result = await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig);
+            const result = await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
             expect(result).toBe(true);
             expect(mockTable.create).toHaveBeenCalledWith(expect.arrayContaining([
                 expect.objectContaining({
@@ -118,7 +122,7 @@ describe('upsertBookingToAirtable', () => {
                 bookingDate: '2025-01-01',
                 checkInDate: '2025-12-31', // 364 días
             };
-            const result = await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig);
+            const result = await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
             expect(result).toBe(true);
             expect(mockTable.create).toHaveBeenCalledWith(expect.arrayContaining([
                 expect.objectContaining({
@@ -150,7 +154,7 @@ describe('upsertBookingToAirtable', () => {
             baseCommissionOrHostFee: 0,
             paymentProcessingFee: 0,
           };
-          const result = await upsertBookingToAirtable(testData, mockConfig);
+          const result = await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(result).toBe(true);
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
@@ -171,7 +175,7 @@ describe('upsertBookingToAirtable', () => {
             bookingDate: '2025-01-01',
             checkInDate: '2025-12-31',
           };
-          const result = await upsertBookingToAirtable(testData, mockConfig);
+          const result = await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(result).toBe(true);
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
@@ -194,7 +198,7 @@ describe('upsertBookingToAirtable', () => {
             bookingDate: undefined,
             checkInDate: '2026-05-20', // 334 días después de 2025-06-20
           };
-          const result = await upsertBookingToAirtable(testData, mockConfig);
+          const result = await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(result).toBe(true);
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
@@ -215,7 +219,7 @@ describe('upsertBookingToAirtable', () => {
             platform: ['airbnb'],
             accommodationName: '2-101 Ocean Serenity Villa',
           };
-          await upsertBookingToAirtable(testData, mockConfig);
+          await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
               expect.objectContaining({
@@ -233,7 +237,7 @@ describe('upsertBookingToAirtable', () => {
             platform: ['vrbo'],
             propertyCodeVrbo: '3456633', // Según mappings, debe ser '5138 Villa Paloma'
           };
-          await upsertBookingToAirtable(testData, mockConfig);
+          await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
               expect.objectContaining({
@@ -251,7 +255,7 @@ describe('upsertBookingToAirtable', () => {
             platform: ['vrbo'],
             propertyCodeVrbo: '#3456633', // Debe limpiar el símbolo y mapear igual
           };
-          await upsertBookingToAirtable(testData, mockConfig);
+          await upsertBookingToAirtable(testData, mockConfig, 'test-message-id');
           expect(mockTable.create).toHaveBeenCalledWith(
             expect.arrayContaining([
               expect.objectContaining({
@@ -284,9 +288,9 @@ describe('upsertBookingToAirtable', () => {
                 bookingDate: undefined,
                 checkInDate: '2025-12-31',
             };
-            const result1 = await (0, airtable_1.upsertBookingToAirtable)(testData1, mockConfig);
-            const result2 = await (0, airtable_1.upsertBookingToAirtable)(testData2, mockConfig);
-            const result3 = await (0, airtable_1.upsertBookingToAirtable)(testData3, mockConfig);
+            const result1 = await (0, airtable_1.upsertBookingToAirtable)(testData1, mockConfig, 'test-message-id');
+            const result2 = await (0, airtable_1.upsertBookingToAirtable)(testData2, mockConfig, 'test-message-id');
+            const result3 = await (0, airtable_1.upsertBookingToAirtable)(testData3, mockConfig, 'test-message-id');
             expect(result1).toBe(true);
             expect(result2).toBe(true);
             expect(result3).toBe(true);
@@ -305,7 +309,7 @@ describe('upsertBookingToAirtable', () => {
                 ...baseBookingData,
                 checkInDate: '2025-08-15',
             };
-            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig);
+            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
             expect(mockTable.create).toHaveBeenCalledWith(expect.arrayContaining([
                 expect.objectContaining({
                     fields: expect.objectContaining({
@@ -319,7 +323,7 @@ describe('upsertBookingToAirtable', () => {
                 ...baseBookingData,
                 checkOutDate: '2025-08-22',
             };
-            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig);
+            await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
             expect(mockTable.create).toHaveBeenCalledWith(expect.arrayContaining([
                 expect.objectContaining({
                     fields: expect.objectContaining({
@@ -327,6 +331,25 @@ describe('upsertBookingToAirtable', () => {
                     }),
                 }),
             ]));
+        });
+    });
+    describe('cuando existe un registro', () => {
+        it('debe actualizar el registro existente en lugar de crear uno nuevo', async () => {
+            const existingRecord = {
+                id: 'rec12345',
+                fields: { 'Reservation number': 'ABC123', Platform: 'Airbnb' },
+            };
+            mockFirstPage.mockResolvedValue([existingRecord]);
+            const testData = {
+                ...baseBookingData,
+                guestName: 'Jane Doe Updated',
+            };
+            const result = await (0, airtable_1.upsertBookingToAirtable)(testData, mockConfig, 'test-message-id');
+            expect(result).toBe(true);
+            expect(mockTable.update).toHaveBeenCalledWith(existingRecord.id, expect.objectContaining({
+                'Full Name': 'Jane Doe Updated',
+            }));
+            expect(mockTable.create).not.toHaveBeenCalled();
         });
     });
 });
