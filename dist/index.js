@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processEmailsHandler = void 0;
+exports.mailAirtableProcessor = exports.processEmailsHandler = void 0;
 const config_1 = require("./config");
 const gmail_1 = require("./services/gmail");
 const gemini_1 = require("./services/gemini");
@@ -216,11 +216,9 @@ Skipped Emails/Reservations: ${skippedCount}
     }
 }
 exports.processEmailsHandler = processEmailsHandler;
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 8080;
-app.get('/', processEmailsHandler);
-app.listen(PORT, () => {
-    console.log(`Express server listening on port ${PORT}`);
-});
+// Exporta la función como entry point para Google Cloud Functions
+async function mailAirtableProcessor(req, res) {
+    await processEmailsHandler(req, res);
+}
+exports.mailAirtableProcessor = mailAirtableProcessor;
 // Para pruebas locales con mocks, ejecuta manualmente otro script o descomenta el bloque original si lo necesitas.

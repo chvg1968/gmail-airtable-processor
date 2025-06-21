@@ -6,8 +6,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
-    "deploy:run": "gcloud run deploy gmail-airtable-service --source . --region us-east1 --allow-unauthenticated",
-    "test": "jest"
+
+    "test": "jest",
+    "deploy:function": "gcloud functions deploy mail-airtable-processor --region=us-east1 --runtime=nodejs20 --trigger-http --allow-unauthenticated --entry-point=mailAirtableProcessor"
   },
   "keywords": [],
   "author": "",

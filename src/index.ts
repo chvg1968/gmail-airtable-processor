@@ -175,9 +175,23 @@ export async function processEmailsHandler(req: Request, res: Response) {
                 extractedData.paymentProcessingFee = platformLower.startsWith('vrbo') ? extractPaymentProcessingFee(originalBody, vrboPaymentProcessingFeeRegex) : 0;
                 
                 const propertyMapping = findPropertyMapping(platform, extractedData.accommodationName ?? null, extractedData.propertyCodeVrbo ?? null);
+
+                // --- Usar siempre la fecha del header para Vrbo ---
+                let bookingDateFinal = extractedData.bookingDate;
+                if (platform.toLowerCase() === 'vrbo' && emailContent.date) {
+                    // Convertir a YYYY-MM-DD
+                    const parsed = new Date(emailContent.date);
+                    if (!isNaN(parsed.getTime())) {
+                        const yyyy = parsed.getFullYear();
+                        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+                        const dd = String(parsed.getDate()).padStart(2, '0');
+                        bookingDateFinal = `${yyyy}-${mm}-${dd}`;
+                    }
+                }
                 
                 const dataForAirtable: ExtractedBookingData = {
                     ...extractedData,
+                    bookingDate: bookingDateFinal,
                     guestName: toTitleCase(extractedData.guestName),
                     accommodationName: propertyMapping || extractedData.accommodationName,
                 };
@@ -218,14 +232,9 @@ Skipped Emails/Reservations: ${skippedCount}
     }
 }
 
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-app.get('/', processEmailsHandler);
-
-app.listen(PORT, () => {
-  console.log(`Express server listening on port ${PORT}`);
-});
+// Exporta la función como entry point para Google Cloud Functions
+export async function mailAirtableProcessor(req: Request, res: Response) {
+  await processEmailsHandler(req, res);
+}
 
 // Para pruebas locales con mocks, ejecuta manualmente otro script o descomenta el bloque original si lo necesitas.
