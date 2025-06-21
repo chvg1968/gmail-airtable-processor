@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processEmailsHandler = void 0;
 const config_1 = require("./config");
@@ -345,3 +348,11 @@ if (require.main === module) {
         process.exit(1);
     });
 }
+//Para ejectuar continuo deploy en Google Cloud:
+const express_1 = __importDefault(require("express"));
+const app = (0, express_1.default)();
+const PORT = process.env.PORT || 8080;
+app.get('/', processEmailsHandler);
+app.listen(PORT, () => {
+    console.log(`Servidor Express escuchando en el puerto ${PORT}`);
+});

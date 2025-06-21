@@ -185,7 +185,11 @@ export async function upsertBookingToAirtable(rawData: ExtractedBookingData, con
             return false; // Indicar que la operación falló para este registro
         }
 
-        const filterFormula = `{Reservation number} = "${reservationNumberToSearch.replace(/"/g, '\"')}"`; // Escapar comillas dobles
+        const normalizedPlatform = rawData.platform?.[0]?.toLowerCase() || 'desconocido';
+        const filterFormula = `AND(
+            {Reservation number} = "${reservationNumberToSearch.replace(/"/g, '\\"')}", 
+            LOWER({Platform}) = "${normalizedPlatform}"
+        )`; // Escapar comillas dobles
         console.log(`DEBUG Airtable: Buscando registro existente con Reservation number: '${reservationNumberToSearch}'`);
         console.log(`DEBUG Airtable: Usando filterByFormula: ${filterFormula}`);
         
