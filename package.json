@@ -6,7 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
-    "deploy": "gcloud functions deploy mail-airtable-processor --trigger-http --runtime nodejs20 --region us-east1 --entry-point processEmailsHandler --allow-unauthenticated --set-env-vars \"AIRTABLE_BASE_ID=app2zC1KWcNeBXjXp,AIRTABLE_TABLE_NAME=Data Test\"",
+    "deploy:run": "gcloud run deploy gmail-airtable-service --source . --region us-east1 --allow-unauthenticated",
     "test": "jest"
   },
   "keywords": [],
