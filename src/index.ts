@@ -135,6 +135,44 @@ export async function processEmailsHandler(req: Request, res: Response) {
 
                 const extractedData = await extractBookingInfoFromEmail(cleanedBody, config.geminiApiKey, new Date().getFullYear());
 
+                // --- Fallbacks when Gemini does not return Guest Name or Booking Date ---
+                if (extractedData) {
+                    // 1. Guest Name from email subject (Airbnb)
+                    const extractNameFromSubject = (subject: string): string | null => {
+                        const match = subject.match(/ - ([^-]+?) (?:arrives|llega)/i) ||
+                                     subject.match(/ - ([^-]+)$/i);
+                        return match && match[1] ? (toTitleCase(match[1].trim()) ?? null) : null;
+                    };
+
+                    const nameFromSubject = emailContent.subject ? extractNameFromSubject(emailContent.subject) : null;
+
+                    // 1a. If Gemini did NOT return guestName, use subject.
+                    if (!extractedData.guestName && nameFromSubject) {
+                        extractedData.guestName = nameFromSubject;
+                    }
+                    // 1b. If Gemini returned only first name (single token) and subject has more, prefer subject.
+                    else if (
+                        extractedData.guestName &&
+                        !extractedData.guestName.includes(' ') &&
+                        nameFromSubject &&
+                        nameFromSubject.toLowerCase().startsWith(extractedData.guestName.toLowerCase()) &&
+                        nameFromSubject.includes(' ')
+                    ) {
+                        extractedData.guestName = nameFromSubject;
+                    }
+
+                    // 2. Booking Date from Gmail header 'Date'
+                    if (!extractedData.bookingDate && emailContent.date) {
+                        const headerDate = new Date(emailContent.date);
+                        if (!isNaN(headerDate.getTime())) {
+                            const yyyy = headerDate.getFullYear();
+                            const mm = String(headerDate.getMonth() + 1).padStart(2, '0');
+                            const dd = String(headerDate.getDate()).padStart(2, '0');
+                            extractedData.bookingDate = `${yyyy}-${mm}-${dd}`;
+                        }
+                    }
+                }
+
                 if (!extractedData || !extractedData.reservationNumber) {
                     console.log(`⚠️ SKIPPED: Could not extract reservation number from messageId=${messageId}.`);
                     skippedCount++;

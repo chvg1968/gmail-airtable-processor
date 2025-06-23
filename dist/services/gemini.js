@@ -106,14 +106,17 @@ async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
             if (jsonData.error) {
                 // Fallback: Si es Vrbo y bookingDate no fue extraído, intenta extraerlo manualmente
                 if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'vrbo' && !jsonData.bookingDate) {
+                    console.log('[Vrbo BookingDate Fallback] Email body:', emailBody);
                     // Busca un patrón de fecha en el cuerpo del correo (ej: "Date: ...", "Booking Date: ...")
                     const dateRegexes = [
                         /Booking Date[:\s]+([A-Za-z]{3,9} \d{1,2}, \d{4})/i,
                         /Date[:\s]+([A-Za-z]{3,9} \d{1,2}, \d{4})/i,
                         /([0-9]{4}-[0-9]{2}-[0-9]{2})/ // ISO
                     ];
+                    let found = false;
                     for (const regex of dateRegexes) {
                         const match = emailBody.match(regex);
+                        console.log(`[Vrbo BookingDate Fallback] Regex: ${regex}, Match:`, match);
                         if (match && match[1]) {
                             // Intenta convertir a YYYY-MM-DD
                             const parsed = new Date(match[1]);
@@ -122,9 +125,17 @@ async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
                                 const mm = String(parsed.getMonth() + 1).padStart(2, '0');
                                 const dd = String(parsed.getDate()).padStart(2, '0');
                                 jsonData.bookingDate = `${yyyy}-${mm}-${dd}`;
+                                found = true;
+                                console.log(`[Vrbo BookingDate Fallback] FOUND bookingDate: ${jsonData.bookingDate}`);
                                 break;
                             }
+                            else {
+                                console.log(`[Vrbo BookingDate Fallback] Date parse failed for:`, match[1]);
+                            }
                         }
+                    }
+                    if (!found) {
+                        console.log('[Vrbo BookingDate Fallback] No booking date found by regex.');
                     }
                 }
                 return jsonData;

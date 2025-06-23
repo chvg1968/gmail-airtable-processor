@@ -34,7 +34,7 @@ Reservation code: HMTRNEDCNZ
 `;
     const prompt = buildPrompt(FORWARDED_EMAIL, referenceYear);
     // Debe contener la instrucción de buscar el bloque Forwarded y extraer la línea 'Date:'
-    expect(prompt).toMatch(/If the email is a forward, search for a header block that starts with '---------- Forwarded message ---------'/);
+    expect(prompt).toMatch(/if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i);
     expect(prompt).toMatch(/extract the line starting with 'Date:'/);
     expect(prompt).toMatch(/Prioritize the original Airbnb header date over any forward date or processing date/);
     // Debe contener la fecha de ejemplo
@@ -57,7 +57,7 @@ Reservation code: ABC123XYZ
     const prompt = buildPrompt(DIRECT_AIRBNB, referenceYear);
     expect(prompt).toContain('bookingDate');
     expect(prompt).toContain('YYYY-MM-DD');
-    expect(prompt).toMatch(/If the email is a forward, search for a header block that starts with '---------- Forwarded message ---------'/);
+    expect(prompt).toMatch(/if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i);
   });
 
   it('should handle Vrbo emails', () => {
