@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, GenerativeModel } from '@google/generative-ai';
 import { getInitializedConfig } from '../config';
+import { logger } from '../utils/logger';
 
 export interface ExtractedBookingData {
     guestName?: string | null;
@@ -106,7 +107,7 @@ export async function extractBookingInfoFromEmail(
     const prompt = buildPrompt(emailBody, referenceYear);
 
     try {
-        console.log('\nEnviando texto a Gemini para extracción...');
+        logger.debug('\nEnviando texto a Gemini para extracción...');
         const chatSession = model.startChat({
             generationConfig,
             safetySettings,
@@ -116,7 +117,7 @@ export async function extractBookingInfoFromEmail(
         
         const responseText = result.response.text();
         if (responseText) {
-            console.log('Respuesta JSON de Gemini recibida.');
+            logger.debug('Respuesta JSON de Gemini recibida.');
             const jsonData = JSON.parse(responseText) as ExtractedBookingData;
 
             // --- Fallback: calcular total si Gemini solo devuelve nightly rate y noches ---
@@ -147,7 +148,7 @@ export async function extractBookingInfoFromEmail(
             if (jsonData.error) {
                 // Fallback: Si es Vrbo y bookingDate no fue extraído, intenta extraerlo manualmente
             if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'vrbo' && !jsonData.bookingDate) {
-                console.log('[Vrbo BookingDate Fallback] Email body:', emailBody);
+                logger.debug('[Vrbo BookingDate Fallback] Email body:', emailBody);
                 // Busca un patrón de fecha en el cuerpo del correo (ej: "Date: ...", "Booking Date: ...")
                 const dateRegexes = [
                     /Booking Date[:\s]+([A-Za-z]{3,9} \d{1,2}, \d{4})/i,
@@ -157,7 +158,7 @@ export async function extractBookingInfoFromEmail(
                 let found = false;
                 for (const regex of dateRegexes) {
                     const match = emailBody.match(regex);
-                    console.log(`[Vrbo BookingDate Fallback] Regex: ${regex}, Match:`, match);
+                    logger.debug(`[Vrbo BookingDate Fallback] Regex: ${regex}, Match:`, match);
                     if (match && match[1]) {
                         // Intenta convertir a YYYY-MM-DD
                         const parsed = new Date(match[1]);
@@ -167,15 +168,15 @@ export async function extractBookingInfoFromEmail(
                             const dd = String(parsed.getDate()).padStart(2, '0');
                             jsonData.bookingDate = `${yyyy}-${mm}-${dd}`;
                             found = true;
-                            console.log(`[Vrbo BookingDate Fallback] FOUND bookingDate: ${jsonData.bookingDate}`);
+                            logger.debug(`[Vrbo BookingDate Fallback] FOUND bookingDate: ${jsonData.bookingDate}`);
                             break;
                         } else {
-                            console.log(`[Vrbo BookingDate Fallback] Date parse failed for:`, match[1]);
+                            logger.debug(`[Vrbo BookingDate Fallback] Date parse failed for:`, match[1]);
                         }
                     }
                 }
                 if (!found) {
-                    console.log('[Vrbo BookingDate Fallback] No booking date found by regex.');
+                    logger.debug('[Vrbo BookingDate Fallback] No booking date found by regex.');
                 }
             }
             return jsonData;
@@ -188,15 +189,15 @@ export async function extractBookingInfoFromEmail(
             }
             return jsonData;
         } else {
-            console.error('Respuesta vacía de Gemini.');
+            logger.error('Respuesta vacía de Gemini.');
             return null;
         }
     } catch (error) {
-        console.error('Error al interactuar con Gemini API:', error);
+        logger.error('Error al interactuar con Gemini API:', error);
         if ((error as any).response?.candidates) {
-            console.error('Detalles del error de Gemini (candidates):', JSON.stringify((error as any).response.candidates, null, 2));
+            logger.error('Detalles del error de Gemini (candidates):', JSON.stringify((error as any).response.candidates, null, 2));
         } else if ((error as any).message?.includes('SAFETY')) {
-             console.error('La respuesta fue bloqueada por configuración de seguridad.');
+             logger.error('La respuesta fue bloqueada por configuración de seguridad.');
         }
         return null;
     }

@@ -25,6 +25,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mailAirtableProcessor = exports.processEmailsHandler = void 0;
 const config_1 = require("./config");
+const email_1 = require("./utils/email");
 const gmail_1 = require("./services/gmail");
 const gemini_1 = require("./services/gemini");
 const propertyMappings_1 = require("./data/propertyMappings");
@@ -127,20 +128,8 @@ async function processEmailsHandler(req, res) {
                     continue;
                 }
                 const originalBody = emailContent.body;
-                // Helper function to clean forwarded email headers and noise.
-                const cleanForwardedBody = (body) => {
-                    const forwardMarker = '---------- Forwarded message ---------';
-                    const markerIndex = body.lastIndexOf(forwardMarker);
-                    if (markerIndex !== -1) {
-                        // Find the end of the header block for the last forwarded message
-                        const headerEndIndex = body.indexOf('\n\n', markerIndex);
-                        if (headerEndIndex !== -1) {
-                            return body.substring(headerEndIndex).trim();
-                        }
-                    }
-                    return body; // Return original body if not a forwarded email
-                };
-                const cleanedBody = cleanForwardedBody(originalBody);
+                // Limpiar encabezados de correos reenviados
+                const cleanedBody = (0, email_1.stripForwardHeaders)(originalBody);
                 const extractedData = await (0, gemini_1.extractBookingInfoFromEmail)(cleanedBody, config.geminiApiKey, new Date().getFullYear());
                 // --- Fallbacks when Gemini does not return Guest Name or Booking Date ---
                 if (extractedData) {

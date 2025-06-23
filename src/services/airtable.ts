@@ -1,4 +1,5 @@
 import Airtable from 'airtable';
+import { logger } from '../utils/logger';
 import { getInitializedConfig, AppConfig } from '../config';
 import { ExtractedBookingData } from './gemini';
 
@@ -16,7 +17,7 @@ function formatDateForAirtable(dateString: string | null | undefined, hourString
 
         const utcDate = new Date(Date.UTC(year, month - 1, day));
         if (isNaN(utcDate.getTime())) {
-            console.error(`Invalid date: ${dateString}`);
+            logger.error(`Invalid date: ${dateString}`);
             return null;
         }
 
@@ -26,7 +27,7 @@ function formatDateForAirtable(dateString: string | null | undefined, hourString
         return hourString ? `${finalYear}-${finalMonth}-${finalDay}T${hourString}` : `${finalYear}-${finalMonth}-${finalDay}`;
 
     } catch (error) {
-        console.error(`Error formatting date '${dateString}':`, error);
+        logger.error(`Error formatting date '${dateString}':`, error);
         return null;
     }
 }
@@ -61,7 +62,7 @@ async function initializeAirtable(config: AppConfig): Promise<void> {
 export async function isMessageProcessed(messageId: string, config: AppConfig): Promise<boolean> {
     await initializeAirtable(config);
     if (!base || !airtableTableName) {
-        console.error('Airtable client not initialized for isMessageProcessed check.');
+        logger.error('Airtable client not initialized for isMessageProcessed check.');
         throw new Error('Airtable client not initialized.');
     }
     try {
@@ -71,7 +72,7 @@ export async function isMessageProcessed(messageId: string, config: AppConfig): 
         }).firstPage();
         return records.length > 0;
     } catch (error) {
-        console.error(`Error checking messageId ${messageId} in Airtable:`, error);
+        logger.error(`Error checking messageId ${messageId} in Airtable:`, error);
         return false; // Fail-safe: assume not processed on error
     }
 }
@@ -83,7 +84,7 @@ export async function upsertBookingToAirtable(
 ): Promise<boolean> {
     await initializeAirtable(config);
     if (!base || !airtableTableName) {
-        console.error('Airtable client not initialized.');
+        logger.error('Airtable client not initialized.');
         throw new Error('Airtable client not initialized.');
     }
 
@@ -122,7 +123,7 @@ export async function upsertBookingToAirtable(
                     const checkIn = new Date(rawData.checkInDate);
                     const bookingDate = rawData.bookingDate ? new Date(rawData.bookingDate) : new Date();
                     const days = Math.ceil((checkIn.getTime() - bookingDate.getTime()) / (1000 * 60 * 60 * 24));
-                    console.log('[Needs Date Review Debug]', {
+                    logger.debug('[Needs Date Review Debug]', {
                         guest: rawData.guestName,
                         reservation: rawData.reservationNumber,
                         checkIn: rawData.checkInDate,
@@ -137,7 +138,7 @@ export async function upsertBookingToAirtable(
                     if (days > 330) return true; // diferencia muy grande
                     return false;
                 } catch (error) {
-                    console.error('Error calculating Needs Date Review:', error);
+                    logger.error('Error calculating Needs Date Review:', error);
                     return false;
                 }
             })(),
@@ -152,7 +153,7 @@ export async function upsertBookingToAirtable(
 
         const reservationNumberToSearch = rawData.reservationNumber;
         if (!reservationNumberToSearch?.trim()) {
-            console.error(`Invalid reservation number: '${reservationNumberToSearch}'`);
+            logger.error(`Invalid reservation number: '${reservationNumberToSearch}'`);
             return false;
         }
 
@@ -164,17 +165,17 @@ export async function upsertBookingToAirtable(
 
         if (existingRecords.length > 0) {
             const existingRecord = existingRecords[0];
-            console.log(`📝 Updating existing reservation: ${reservationNumberToSearch} - ${platform}`);
+            logger.debug(`📝 Updating existing reservation: ${reservationNumberToSearch} - ${platform}`);
             await base(airtableTableName).update(existingRecord.id, airtableFields);
             return true;
         } else {
-            console.log(`🆕 Creating new reservation: ${reservationNumberToSearch} - ${platform}`);
+            logger.debug(`🆕 Creating new reservation: ${reservationNumberToSearch} - ${platform}`);
             await base(airtableTableName).create([{ fields: airtableFields }]);
             return true;
         }
 
     } catch (error) {
-        console.error(`❌ Error interacting with Airtable for ${rawData.reservationNumber}:`, error);
+        logger.error(`❌ Error interacting with Airtable for ${rawData.reservationNumber}:`, error);
         return false;
     }
 }

@@ -1,5 +1,6 @@
 // src/config.ts
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
+import { logger } from './utils/logger';
 
 // Descomentar dotenv para desarrollo local, asegurar que .env se cargue.
 import * as dotenv from 'dotenv';
@@ -18,7 +19,7 @@ async function getSecretValue(secretName: string, projectId: string): Promise<st
     }
     return payload;
   } catch (error) {
-    console.error(`Failed to access secret ${secretName}:`, error);
+    logger.error(`Failed to access secret ${secretName}:`, error);
     throw new Error(`Failed to access secret ${secretName}. Ensure it exists and the function has permissions.`);
   }
 }
@@ -51,7 +52,7 @@ async function loadConfig(): Promise<AppConfig> {
   if (!airtableTableName) throw new Error("Missing AIRTABLE_TABLE_NAME environment variable.");
 
   if (isCloudEnvironment) {
-    console.log('INFO: Detectado entorno de nube. Cargando secretos desde Secret Manager...');
+    logger.debug('INFO: Detectado entorno de nube. Cargando secretos desde Secret Manager...');
     
     // Forma robusta de obtener el Project ID usando la librería cliente.
     const projectId = await client.getProjectId();
@@ -76,7 +77,7 @@ async function loadConfig(): Promise<AppConfig> {
       geminiApiKey,
     };
   } else {
-    console.log('INFO: Detectado entorno local. Cargando secretos desde variables de entorno (.env)...');
+    logger.debug('INFO: Detectado entorno local. Cargando secretos desde variables de entorno (.env)...');
     // Cargar secretos desde variables de entorno para desarrollo local
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;

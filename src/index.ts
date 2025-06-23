@@ -1,4 +1,5 @@
 import { getInitializedConfig, AppConfig } from './config';
+import { stripForwardHeaders } from './utils/email';
 // Define GmailMessageMeta locally
 interface GmailMessageMeta {
     id: string;
@@ -8,6 +9,7 @@ import { getGmailProfile, searchEmails, getEmailContent, EmailContent } from './
 import { extractBookingInfoFromEmail, ExtractedBookingData } from './services/gemini';
 import { vrboPropertyMappings as Vrbo_properties, airbnbPropertyMappings as Airbnb_properties, AirbnbProperty, VrboProperty } from './data/propertyMappings';
 import { upsertBookingToAirtable, isMessageProcessed } from './services/airtable';
+import { logger } from './utils/logger';
 
 function toTitleCase(str: string | null | undefined): string | null | undefined {
   if (!str) return str;
@@ -63,75 +65,61 @@ export async function processEmailsHandler(req: Request, res: Response) {
     try {
         config = await getInitializedConfig();
     } catch (error) {
-        console.error('Error initializing config:', error);
+        logger.error('Error initializing config:', error);
         res.status(500).send('Error initializing config: ' + (error instanceof Error ? error.message : String(error)));
         return;
     }
 
-    console.log('Starting Gmail-Airtable email processor...');
+    logger.info('Starting Gmail-Airtable email processor...');
 
     try {
         await getGmailProfile();
-        console.log('Gmail connection successful.');
+        logger.info('Gmail connection successful.');
 
         const now = new Date();
         const fortyEightHoursAgo = new Date();
         fortyEightHoursAgo.setDate(fortyEightHoursAgo.getDate() - 2);
         const searchSinceDateString = `${fortyEightHoursAgo.getFullYear()}/${String(fortyEightHoursAgo.getMonth() + 1).padStart(2, '0')}/${String(fortyEightHoursAgo.getDate()).padStart(2, '0')}`;
         
-        console.log(`Searching emails since ${searchSinceDateString}`);
+        logger.info(`Searching emails since ${searchSinceDateString}`);
         const query = `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
         const messages: GmailMessageMeta[] = await searchEmails(query) as GmailMessageMeta[];
-        console.log(`Found ${messages ? messages.length : 0} emails.`);
+        logger.info(`Found ${messages ? messages.length : 0} emails.`);
 
         const processedReservations = new Set<string>();
         let skippedCount = 0;
         let processedInAirtableCount = 0;
 
         if (!messages || messages.length === 0) {
-            console.log("No new emails to process.");
+            logger.info("No new emails to process.");
         } else {
             for (const messageMeta of messages) {
                 const messageId = messageMeta.id;
-                console.log(`--- Processing email (ID: ${messageId}) ---`);
+                logger.info(`--- Processing email (ID: ${messageId}) ---`);
 
                 if (!messageId) {
-                    console.log('⚠️ SKIPPED: Message found without an ID.');
+                    logger.warn('⚠️ SKIPPED: Message found without an ID.');
                     skippedCount++;
                     continue;
                 }
 
                 if (await isMessageProcessed(messageId, config)) {
-                    console.log(`📬 SKIPPED: Email already processed (messageId=${messageId}).`);
+                    logger.info(`📬 SKIPPED: Email already processed (messageId=${messageId}).`);
                     skippedCount++;
                     continue;
                 }
 
                 const emailContent = await getEmailContent(messageId);
                 if (!emailContent || !emailContent.body) {
-                    console.log(`⚠️ SKIPPED: Could not retrieve full content for message ID: ${messageId}`);
+                    logger.warn(`⚠️ SKIPPED: Could not retrieve full content for message ID: ${messageId}`);
                     skippedCount++;
                     continue;
                 }
 
                 const originalBody = emailContent.body;
 
-                // Helper function to clean forwarded email headers and noise.
-                const cleanForwardedBody = (body: string): string => {
-                    const forwardMarker = '---------- Forwarded message ---------';
-                    const markerIndex = body.lastIndexOf(forwardMarker);
-
-                    if (markerIndex !== -1) {
-                        // Find the end of the header block for the last forwarded message
-                        const headerEndIndex = body.indexOf('\n\n', markerIndex);
-                        if (headerEndIndex !== -1) {
-                            return body.substring(headerEndIndex).trim();
-                        }
-                    }
-                    return body; // Return original body if not a forwarded email
-                };
-
-                const cleanedBody = cleanForwardedBody(originalBody);
+                // Limpiar encabezados de correos reenviados
+                const cleanedBody = stripForwardHeaders(originalBody);
 
                 const extractedData = await extractBookingInfoFromEmail(cleanedBody, config.geminiApiKey, new Date().getFullYear());
 
@@ -139,9 +127,15 @@ export async function processEmailsHandler(req: Request, res: Response) {
                 if (extractedData) {
                     // 1. Guest Name from email subject (Airbnb)
                     const extractNameFromSubject = (subject: string): string | null => {
-                        const match = subject.match(/ - ([^-]+?) (?:arrives|llega)/i) ||
-                                     subject.match(/ - ([^-]+)$/i);
-                        return match && match[1] ? (toTitleCase(match[1].trim()) ?? null) : null;
+                        // 1. Vrbo pattern: "Instant Booking from Daniel Glaenzer: Jun 25 - ..."
+                        const vrboMatch = subject.match(/from\s+([^:]+):/i);
+                        if (vrboMatch && vrboMatch[1]) {
+                            return toTitleCase(vrboMatch[1].trim()) ?? null;
+                        }
+                        // 2. Airbnb patterns we already handle
+                        const airbnbMatch = subject.match(/ - ([^-]+?) (?:arrives|llega)/i) ||
+                                             subject.match(/ - ([^-]+)$/i);
+                        return airbnbMatch && airbnbMatch[1] ? (toTitleCase(airbnbMatch[1].trim()) ?? null) : null;
                     };
 
                     const nameFromSubject = emailContent.subject ? extractNameFromSubject(emailContent.subject) : null;
@@ -174,7 +168,7 @@ export async function processEmailsHandler(req: Request, res: Response) {
                 }
 
                 if (!extractedData || !extractedData.reservationNumber) {
-                    console.log(`⚠️ SKIPPED: Could not extract reservation number from messageId=${messageId}.`);
+                    logger.warn(`⚠️ SKIPPED: Could not extract reservation number from messageId=${messageId}.`);
                     skippedCount++;
                     continue;
                 }
@@ -201,7 +195,7 @@ export async function processEmailsHandler(req: Request, res: Response) {
                 const reservationKey = `${extractedData.reservationNumber}::${platform}`;
 
                 if (processedReservations.has(reservationKey)) {
-                    console.log(`🔁 SKIPPED: Duplicate reservation detected in this run: ${reservationKey}.`);
+                    logger.warn(`🔁 SKIPPED: Duplicate reservation detected in this run: ${reservationKey}.`);
                     skippedCount++;
                     continue;
                 }
@@ -251,7 +245,7 @@ Reservations Processed in Airtable: ${processedInAirtableCount}
 Skipped Emails/Reservations: ${skippedCount}
 ----------------------------------------
 `;
-            console.log(summaryLog);
+            logger.info(summaryLog);
 
             res.status(200).json({
             message: "Email processing completed.",
@@ -262,7 +256,7 @@ Skipped Emails/Reservations: ${skippedCount}
             }
             });
     } catch (error) {
-        console.error('Error in main execution:', error);
+        logger.error('Error in main execution:', error);
         res.status(500).json({ 
             message: 'Error in main execution', 
             error: (error instanceof Error ? error.message : String(error)) 

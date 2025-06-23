@@ -1,6 +1,7 @@
 import { google, gmail_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { getInitializedConfig } from '../config';
+import { logger } from '../utils/logger';
 
 let oauth2ClientInstance: OAuth2Client | null = null;
 
@@ -28,15 +29,15 @@ async function getOAuth2Client(): Promise<OAuth2Client> {
                 access_token: credentials.access_token,
                 refresh_token: appConfig.googleRefreshToken,
             });
-            console.log('Access token refreshed successfully.');
+            logger.debug('Access token refreshed successfully.');
             oauth2ClientInstance = client;
             return client;
         } else {
-             console.error('Failed to refresh access token, no access_token in credentials. Response:', credentials);
+             logger.error('Failed to refresh access token, no access_token in credentials. Response:', credentials);
              throw new Error('Failed to refresh access token, no access_token in credentials.');
         }
     } catch (error: any) {
-        console.error('Error refreshing access token:', error.response?.data || error.message || error);
+        logger.error('Error refreshing access token:', error.response?.data || error.message || error);
         throw new Error(`Could not refresh access token: ${error.message}`);
     }
 }
@@ -114,7 +115,7 @@ export async function getEmailContent(messageId: string): Promise<EmailContent |
             internalDate: message.internalDate || '',
         };
     } catch (error) {
-        console.error(`Error fetching email content for message ${messageId}:`, error);
+        logger.error(`Error fetching email content for message ${messageId}:`, error);
         return null;
     }
 }
@@ -128,10 +129,10 @@ export async function getGmailProfile(): Promise<string | null | undefined> {
     try {
         const gmail = await getGmailClient();
         const res = await gmail.users.getProfile({ userId: 'me' });
-        console.log('Successfully connected to Gmail. User email:', res.data.emailAddress);
+        logger.debug('Successfully connected to Gmail. User email:', res.data.emailAddress);
         return res.data.emailAddress;
     } catch (error) {
-        console.error('Error connecting to Gmail or fetching profile:', error);
+        logger.error('Error connecting to Gmail or fetching profile:', error);
         throw error;
     }
 }
@@ -155,7 +156,7 @@ async function listMessages(gmail: gmail_v1.Gmail, query: string, pageToken?: st
             return messages;
         }
     } catch (error) {
-        console.error('Error listing messages:', error);
+        logger.error('Error listing messages:', error);
         throw error;
     }
 }
@@ -163,14 +164,14 @@ async function listMessages(gmail: gmail_v1.Gmail, query: string, pageToken?: st
 export async function searchEmails(searchCriteriaQuery: string): Promise<gmail_v1.Schema$Message[]> {
     const gmail = await getGmailClient();
     
-    console.log(`Searching emails with query: ${searchCriteriaQuery}`);
+    logger.debug(`Searching emails with query: ${searchCriteriaQuery}`);
 
     try {
         const allMessages = await listMessages(gmail, searchCriteriaQuery);
-        console.log(`Found ${allMessages.length} messages matching criteria.`);
+        logger.debug(`Found ${allMessages.length} messages matching criteria.`);
         return allMessages;
     } catch (error) {
-        console.error('Error searching emails:', error);
+        logger.error('Error searching emails:', error);
         throw error;
     }
 }
