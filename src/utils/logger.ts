@@ -4,18 +4,18 @@
  * para evitar ruido. warn/error siguen mostrando salida.
  */
 
-const isTest = process.env.NODE_ENV === 'test';
+const isTest = process.env.NODE_ENV === "test";
 
-function baseLog(method: 'log' | 'info' | 'warn' | 'error', ...args: any[]) {
+function baseLog(method: "log" | "info" | "warn" | "error", ...args: any[]) {
   // Silenciar debug/info en tests
-  if (isTest && (method === 'log' || method === 'info')) return;
+  if (isTest && (method === "log" || method === "info")) return;
   // eslint-disable-next-line no-console
   console[method](...args);
 }
 
 export const logger = {
-  debug: (...a: any[]) => baseLog('log', ...a),
-  info: (...a: any[]) => baseLog('info', ...a),
-  warn: (...a: any[]) => baseLog('warn', ...a),
-  error: (...a: any[]) => baseLog('error', ...a),
+  debug: (...a: any[]) => baseLog("log", ...a),
+  info: (...a: any[]) => baseLog("info", ...a),
+  warn: (...a: any[]) => baseLog("warn", ...a),
+  error: (...a: any[]) => baseLog("error", ...a),
 };

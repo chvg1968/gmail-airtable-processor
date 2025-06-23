@@ -1,4 +1,4 @@
-import { buildPrompt } from '../../services/gemini';
+import { buildPrompt } from "../../services/gemini";
 
 const FORWARDED_EMAIL = `
 ---------- Forwarded message ---------
@@ -14,11 +14,10 @@ Property: Bahia Beach 4 BDRM Penthouse - Villa Clara
 Reservation code: HMTRNEDCNZ
 `;
 
-
-describe('Gemini buildPrompt robustness', () => {
+describe("Gemini buildPrompt robustness", () => {
   const referenceYear = 2025;
 
-  it('should instruct Gemini to extract the booking date from the original Airbnb header in forwarded emails', () => {
+  it("should instruct Gemini to extract the booking date from the original Airbnb header in forwarded emails", () => {
     const FORWARDED_EMAIL = `
 ---------- Forwarded message ---------
 From: Airbnb <automated@airbnb.com>
@@ -34,14 +33,18 @@ Reservation code: HMTRNEDCNZ
 `;
     const prompt = buildPrompt(FORWARDED_EMAIL, referenceYear);
     // Debe contener la instrucción de buscar el bloque Forwarded y extraer la línea 'Date:'
-    expect(prompt).toMatch(/if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i);
+    expect(prompt).toMatch(
+      /if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i,
+    );
     expect(prompt).toMatch(/extract the line starting with 'Date:'/);
-    expect(prompt).toMatch(/Prioritize the original Airbnb header date over any forward date or processing date/);
+    expect(prompt).toMatch(
+      /Prioritize the original Airbnb header date over any forward date or processing date/,
+    );
     // Debe contener la fecha de ejemplo
     expect(prompt).toContain("Date: Wed, May 21, 2025 at 2:56 PM");
   });
 
-  it('should handle direct Airbnb emails (no forward)', () => {
+  it("should handle direct Airbnb emails (no forward)", () => {
     const DIRECT_AIRBNB = `
 From: Airbnb <automated@airbnb.com>
 Date: Wed, May 21, 2025 at 2:56 PM
@@ -55,12 +58,14 @@ Property: Beachfront Villa
 Reservation code: ABC123XYZ
 `;
     const prompt = buildPrompt(DIRECT_AIRBNB, referenceYear);
-    expect(prompt).toContain('bookingDate');
-    expect(prompt).toContain('YYYY-MM-DD');
-    expect(prompt).toMatch(/if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i);
+    expect(prompt).toContain("bookingDate");
+    expect(prompt).toContain("YYYY-MM-DD");
+    expect(prompt).toMatch(
+      /if the email is a forward[,\s]+search for a header block that starts with '---------- Forwarded message ---------'/i,
+    );
   });
 
-  it('should handle Vrbo emails', () => {
+  it("should handle Vrbo emails", () => {
     const VRBO_EMAIL = `
 From: Vrbo <no-reply@vrbo.com>
 Date: Wed, May 21, 2025 at 2:56 PM
@@ -74,12 +79,12 @@ Property: Ocean Grace Villa
 Reservation code: HA-987654
 `;
     const prompt = buildPrompt(VRBO_EMAIL, referenceYear);
-    expect(prompt).toContain('Vrbo');
-    expect(prompt).toContain('platform');
-    expect(prompt).toContain('propertyCodeVrbo');
+    expect(prompt).toContain("Vrbo");
+    expect(prompt).toContain("platform");
+    expect(prompt).toContain("propertyCodeVrbo");
   });
 
-  it('should instruct to use reference year if year is missing', () => {
+  it("should instruct to use reference year if year is missing", () => {
     const EMAIL_NO_YEAR = `
 From: Airbnb <automated@airbnb.com>
 Subject: Reservation confirmed - Jane Doe arrives Jun 5
@@ -92,7 +97,9 @@ Property: Garden Villa
 Reservation code: XYZ987
 `;
     const prompt = buildPrompt(EMAIL_NO_YEAR, referenceYear);
-    expect(prompt).toContain('if the year is missing, use the provided reference year');
+    expect(prompt).toContain(
+      "if the year is missing, use the provided reference year",
+    );
     expect(prompt).toContain(referenceYear.toString());
   });
 });
