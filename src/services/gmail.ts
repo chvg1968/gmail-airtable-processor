@@ -7,12 +7,14 @@ let oauth2ClientInstance: OAuth2Client | null = null;
 
 async function getOAuth2Client(): Promise<OAuth2Client> {
   const appConfig = await getInitializedConfig();
+  logger.info("[OAuth] App config loaded. Initializing OAuth2 client...");
 
   if (
     oauth2ClientInstance &&
     oauth2ClientInstance.credentials.expiry_date &&
     oauth2ClientInstance.credentials.expiry_date > Date.now() + 60000
   ) {
+    logger.info("[OAuth] Using cached OAuth2 client with valid access token.");
     return oauth2ClientInstance;
   }
 
@@ -27,13 +29,14 @@ async function getOAuth2Client(): Promise<OAuth2Client> {
   });
 
   try {
+    logger.info("[OAuth] Refreshing access token with Google...");
     const { credentials } = await client.refreshAccessToken();
     if (credentials.access_token) {
       client.setCredentials({
         access_token: credentials.access_token,
         refresh_token: appConfig.googleRefreshToken,
       });
-      logger.debug("Access token refreshed successfully.");
+      logger.info("[OAuth] Access token refreshed successfully.");
       oauth2ClientInstance = client;
       return client;
     } else {
@@ -142,7 +145,9 @@ export async function getEmailContent(
 }
 
 export async function getGmailClient(): Promise<gmail_v1.Gmail> {
+  logger.info("[OAuth] Creating Gmail client instance...");
   const client = await getOAuth2Client();
+  logger.info("[OAuth] Gmail client authenticated successfully.");
   return google.gmail({ version: "v1", auth: client });
 }
 

@@ -43,13 +43,25 @@ function normalizePlatform(platform: string | undefined | null): string {
   return "Desconocido";
 }
 
+import { findPropertyMapping } from "../utils/propertyMapping";
+import {
+  airbnbPropertyMappings,
+  vrboPropertyMappings,
+} from "../data/propertyMappings";
+
 function normalizeProperty(
   accommodationName: string | null | undefined,
+  propertyCodeVrbo: string | null | undefined,
+  platform: string | null | undefined,
 ): string {
-  if (!accommodationName) return "Unknown Property";
-  // Lógica de mapeo de propiedades (simplificada para brevedad)
-  // En un caso real, esto podría consultar los mapeos como antes.
-  return accommodationName;
+  const mapped = findPropertyMapping(
+    accommodationName,
+    propertyCodeVrbo,
+    platform,
+    airbnbPropertyMappings,
+    vrboPropertyMappings,
+  );
+  return mapped ?? "Unknown Property";
 }
 
 // --- Inicialización de Airtable ---
@@ -105,7 +117,11 @@ export async function upsertBookingToAirtable(
 
   try {
     const platform = normalizePlatform(rawData.platform?.[0]);
-    const propertyName = normalizeProperty(rawData.accommodationName);
+    const propertyName = normalizeProperty(
+      rawData.accommodationName,
+      rawData.propertyCodeVrbo,
+      platform,
+    );
 
     // Vrbo Review logic: check if either baseCommission or paymentProcessingFee is missing or null/empty/zero
     const baseCommission =
@@ -201,16 +217,14 @@ export async function upsertBookingToAirtable(
 
     if (existingRecords.length > 0) {
       const existingRecord = existingRecords[0];
-      logger.debug(
-        `📝 Updating existing reservation: ${reservationNumberToSearch} - ${platform}`,
-      );
+      logger.info(`[Airtable] Updating existing reservation: ${reservationNumberToSearch} - ${platform}`);
       await base(airtableTableName).update(existingRecord.id, airtableFields);
+      logger.info(`[Airtable] Reservation updated successfully: ${reservationNumberToSearch}`);
       return true;
     } else {
-      logger.debug(
-        `🆕 Creating new reservation: ${reservationNumberToSearch} - ${platform}`,
-      );
+      logger.info(`[Airtable] Creating new reservation: ${reservationNumberToSearch} - ${platform}`);
       await base(airtableTableName).create([{ fields: airtableFields }]);
+      logger.info(`[Airtable] Reservation created successfully: ${reservationNumberToSearch}`);
       return true;
     }
   } catch (error) {
