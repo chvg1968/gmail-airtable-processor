@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractBookingInfoFromEmail = exports.buildPrompt = void 0;
 const generative_ai_1 = require("@google/generative-ai");
+const logger_1 = require("../utils/logger");
 let genAI = null;
 let model = null;
 async function initializeGeminiClient(apiKey) {
@@ -19,10 +20,22 @@ const generationConfig = {
     responseMimeType: "application/json",
 };
 const safetySettings = [
-    { category: generative_ai_1.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: generative_ai_1.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: generative_ai_1.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: generative_ai_1.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    {
+        category: generative_ai_1.HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    },
+    {
+        category: generative_ai_1.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    },
+    {
+        category: generative_ai_1.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    },
+    {
+        category: generative_ai_1.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: generative_ai_1.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    },
 ];
 function buildPrompt(emailBody, referenceYear) {
     return `
@@ -67,11 +80,11 @@ exports.buildPrompt = buildPrompt;
 async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
     await initializeGeminiClient(apiKey);
     if (!model) {
-        throw new Error('Gemini model not initialized');
+        throw new Error("Gemini model not initialized");
     }
     const prompt = buildPrompt(emailBody, referenceYear);
     try {
-        console.log('\nEnviando texto a Gemini para extracción...');
+        logger_1.logger.debug("\nEnviando texto a Gemini para extracción...");
         const chatSession = model.startChat({
             generationConfig,
             safetySettings,
@@ -80,24 +93,27 @@ async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
         const result = await chatSession.sendMessage("Genera el JSON.");
         const responseText = result.response.text();
         if (responseText) {
-            console.log('Respuesta JSON de Gemini recibida.');
+            logger_1.logger.debug("Respuesta JSON de Gemini recibida.");
             const jsonData = JSON.parse(responseText);
             // --- Fallback: calcular total si Gemini solo devuelve nightly rate y noches ---
             // Vrbo: sumar Club a accommodationPrice si ambos existen
-            if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'vrbo') {
-                if (typeof jsonData.accommodationPrice === 'number' && typeof jsonData.clubFee === 'number') {
+            if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === "vrbo") {
+                if (typeof jsonData.accommodationPrice === "number" &&
+                    typeof jsonData.clubFee === "number") {
                     jsonData.accommodationPrice += jsonData.clubFee;
                 }
             }
-            if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'airbnb') {
+            if (jsonData.platform &&
+                jsonData.platform[0]?.toLowerCase() === "airbnb") {
                 // Buscar patrón de nightly rate y noches en el cuerpo del email
                 const nightsMatch = emailBody.match(/(\d+)\s+nights?/i);
                 const nightlyRateMatch = emailBody.match(/\$([\d,]+(?:\.\d{2})?)\s*(?:x|×)\s*\d+\s+nights?/i);
                 if (nightsMatch && nightlyRateMatch) {
                     const nights = parseInt(nightsMatch[1], 10);
-                    const nightlyRate = parseFloat(nightlyRateMatch[1].replace(/,/g, ''));
+                    const nightlyRate = parseFloat(nightlyRateMatch[1].replace(/,/g, ""));
                     const calculatedTotal = nightlyRate * nights;
-                    if ((!jsonData.accommodationPrice || Math.abs(jsonData.accommodationPrice - nightlyRate) < 1) &&
+                    if ((!jsonData.accommodationPrice ||
+                        Math.abs(jsonData.accommodationPrice - nightlyRate) < 1) &&
                         calculatedTotal > 0) {
                         jsonData.accommodationPrice = calculatedTotal;
                     }
@@ -105,37 +121,39 @@ async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
             }
             if (jsonData.error) {
                 // Fallback: Si es Vrbo y bookingDate no fue extraído, intenta extraerlo manualmente
-                if (jsonData.platform && jsonData.platform[0]?.toLowerCase() === 'vrbo' && !jsonData.bookingDate) {
-                    console.log('[Vrbo BookingDate Fallback] Email body:', emailBody);
+                if (jsonData.platform &&
+                    jsonData.platform[0]?.toLowerCase() === "vrbo" &&
+                    !jsonData.bookingDate) {
+                    logger_1.logger.debug("[Vrbo BookingDate Fallback] Email body:", emailBody);
                     // Busca un patrón de fecha en el cuerpo del correo (ej: "Date: ...", "Booking Date: ...")
                     const dateRegexes = [
                         /Booking Date[:\s]+([A-Za-z]{3,9} \d{1,2}, \d{4})/i,
                         /Date[:\s]+([A-Za-z]{3,9} \d{1,2}, \d{4})/i,
-                        /([0-9]{4}-[0-9]{2}-[0-9]{2})/ // ISO
+                        /([0-9]{4}-[0-9]{2}-[0-9]{2})/, // ISO
                     ];
                     let found = false;
                     for (const regex of dateRegexes) {
                         const match = emailBody.match(regex);
-                        console.log(`[Vrbo BookingDate Fallback] Regex: ${regex}, Match:`, match);
+                        logger_1.logger.debug(`[Vrbo BookingDate Fallback] Regex: ${regex}, Match:`, match);
                         if (match && match[1]) {
                             // Intenta convertir a YYYY-MM-DD
                             const parsed = new Date(match[1]);
                             if (!isNaN(parsed.getTime())) {
                                 const yyyy = parsed.getFullYear();
-                                const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-                                const dd = String(parsed.getDate()).padStart(2, '0');
+                                const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+                                const dd = String(parsed.getDate()).padStart(2, "0");
                                 jsonData.bookingDate = `${yyyy}-${mm}-${dd}`;
                                 found = true;
-                                console.log(`[Vrbo BookingDate Fallback] FOUND bookingDate: ${jsonData.bookingDate}`);
+                                logger_1.logger.debug(`[Vrbo BookingDate Fallback] FOUND bookingDate: ${jsonData.bookingDate}`);
                                 break;
                             }
                             else {
-                                console.log(`[Vrbo BookingDate Fallback] Date parse failed for:`, match[1]);
+                                logger_1.logger.debug(`[Vrbo BookingDate Fallback] Date parse failed for:`, match[1]);
                             }
                         }
                     }
                     if (!found) {
-                        console.log('[Vrbo BookingDate Fallback] No booking date found by regex.');
+                        logger_1.logger.debug("[Vrbo BookingDate Fallback] No booking date found by regex.");
                     }
                 }
                 return jsonData;
@@ -149,17 +167,17 @@ async function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
             return jsonData;
         }
         else {
-            console.error('Respuesta vacía de Gemini.');
+            logger_1.logger.error("Respuesta vacía de Gemini.");
             return null;
         }
     }
     catch (error) {
-        console.error('Error al interactuar con Gemini API:', error);
+        logger_1.logger.error("Error al interactuar con Gemini API:", error);
         if (error.response?.candidates) {
-            console.error('Detalles del error de Gemini (candidates):', JSON.stringify(error.response.candidates, null, 2));
+            logger_1.logger.error("Detalles del error de Gemini (candidates):", JSON.stringify(error.response.candidates, null, 2));
         }
-        else if (error.message?.includes('SAFETY')) {
-            console.error('La respuesta fue bloqueada por configuración de seguridad.');
+        else if (error.message?.includes("SAFETY")) {
+            logger_1.logger.error("La respuesta fue bloqueada por configuración de seguridad.");
         }
         return null;
     }

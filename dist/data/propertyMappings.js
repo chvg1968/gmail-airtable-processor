@@ -13,7 +13,7 @@ exports.vrboPropertyMappings = [
     { code: "3204279", name: "Atl. G7 Casa Prestige" },
     { code: "4302592", name: "2-102 Ocean Bliss Villa" },
     { code: "4414516", name: "2-208 Ocean Haven Villa" },
-    { code: "4507742", name: "2-103 Ocean Sound Villa" }
+    { code: "4507742", name: "2-103 Ocean Sound Villa" },
 ];
 exports.airbnbPropertyMappings = [
     { alias: "Villa Clara", name: "3325 Villa Clara" },
@@ -29,5 +29,5 @@ exports.airbnbPropertyMappings = [
     { alias: "Ocean Sound Villa", name: "2-103 Ocean Sound Villa" },
     { alias: "Ocean Grace Villa", name: "2-105 Ocean Grace Villa" },
     { alias: "Ocean Serenity Villa", name: "2-101 Ocean Serenity Villa" },
-    { alias: "Ocean View Villa", name: "315 Ocean View Villa" }
+    { alias: "Ocean View Villa", name: "315 Ocean View Villa" },
 ];

@@ -26,6 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getInitializedConfig = void 0;
 // src/config.ts
 const secret_manager_1 = require("@google-cloud/secret-manager");
+const logger_1 = require("./utils/logger");
 // Descomentar dotenv para desarrollo local, asegurar que .env se cargue.
 const dotenv = __importStar(require("dotenv"));
 dotenv.config();
@@ -41,7 +42,7 @@ async function getSecretValue(secretName, projectId) {
         return payload;
     }
     catch (error) {
-        console.error(`Failed to access secret ${secretName}:`, error);
+        logger_1.logger.error(`Failed to access secret ${secretName}:`, error);
         throw new Error(`Failed to access secret ${secretName}. Ensure it exists and the function has permissions.`);
     }
 }
@@ -51,27 +52,27 @@ async function loadConfig() {
         process.env.FUNCTION_TARGET ||
         process.env.K_SERVICE ||
         process.env.GCP_PROJECT);
-    // Variables de entorno para configuración no sensible (siempre se leen de process.env)
-    const airtableBaseId = process.env.AIRTABLE_BASE_ID;
-    const airtableTableName = process.env.AIRTABLE_TABLE_NAME;
-    // const startDate = process.env.START_DATE || "2025-06-01"; // Ya no se usa startDate de config
-    if (!airtableBaseId)
-        throw new Error("Missing AIRTABLE_BASE_ID environment variable.");
-    if (!airtableTableName)
-        throw new Error("Missing AIRTABLE_TABLE_NAME environment variable.");
     if (isCloudEnvironment) {
-        console.log('INFO: Detectado entorno de nube. Cargando secretos desde Secret Manager...');
-        // Forma robusta de obtener el Project ID usando la librería cliente.
+        logger_1.logger.debug("INFO: Detectado entorno de nube. Cargando secretos y configuración desde Secret Manager...");
         const projectId = await client.getProjectId();
         if (!projectId) {
-            throw new Error('ERROR: No se pudo determinar el Google Cloud Project ID desde el entorno.');
+            throw new Error("ERROR: No se pudo determinar el Google Cloud Project ID desde el entorno.");
         }
-        // Secretos cargados desde Secret Manager
-        const googleClientId = await getSecretValue('gmail_airtable_processor_oauth_client_id', projectId);
-        const googleClientSecret = await getSecretValue('gmail_airtable_processor_oauth_client_secret', projectId);
-        const googleRefreshToken = await getSecretValue('gmail_airtable_processor_gmail_refresh_token', projectId);
-        const airtableApiKey = await getSecretValue('gmail_airtable_processor_airtable_api_key', projectId);
-        const geminiApiKey = await getSecretValue('gmail_airtable_processor_gemini_api_key', projectId);
+        // Cargar secretos y configuración desde Secret Manager
+        const [googleClientId, googleClientSecret, googleRefreshToken, airtableApiKey, geminiApiKey, airtableTableName, // Cargar desde Secret Manager
+        ] = await Promise.all([
+            getSecretValue("gmail_airtable_processor_oauth_client_id", projectId),
+            getSecretValue("gmail_airtable_processor_oauth_client_secret", projectId),
+            getSecretValue("gmail_airtable_processor_gmail_refresh_token", projectId),
+            getSecretValue("gmail_airtable_processor_airtable_api_key", projectId),
+            getSecretValue("gmail_airtable_processor_gemini_api_key", projectId),
+            getSecretValue("AIRTABLE_TABLE_NAME", projectId), // Nombre del secreto
+        ]);
+        // AIRTABLE_BASE_ID puede seguir viniendo de las variables de entorno
+        const airtableBaseId = process.env.AIRTABLE_BASE_ID;
+        if (!airtableBaseId) {
+            throw new Error("Missing AIRTABLE_BASE_ID environment variable.");
+        }
         return {
             googleClientId,
             googleClientSecret,
@@ -83,23 +84,30 @@ async function loadConfig() {
         };
     }
     else {
-        console.log('INFO: Detectado entorno local. Cargando secretos desde variables de entorno (.env)...');
-        // Cargar secretos desde variables de entorno para desarrollo local
+        logger_1.logger.debug("INFO: Detectado entorno local. Cargando configuración desde variables de entorno (.env)...");
+        // Cargar configuración y secretos desde variables de entorno para desarrollo local
+        const airtableBaseId = process.env.AIRTABLE_BASE_ID;
+        const airtableTableName = process.env.AIRTABLE_TABLE_NAME;
         const googleClientId = process.env.GOOGLE_CLIENT_ID;
         const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
         const googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN;
         const airtableApiKey = process.env.AIRTABLE_API_KEY;
         const geminiApiKey = process.env.GEMINI_API_KEY;
+        // Validaciones
+        if (!airtableBaseId)
+            throw new Error("Missing AIRTABLE_BASE_ID from .env.");
+        if (!airtableTableName)
+            throw new Error("Missing AIRTABLE_TABLE_NAME from .env.");
         if (!googleClientId)
-            throw new Error("Missing GOOGLE_CLIENT_ID from .env for local development.");
+            throw new Error("Missing GOOGLE_CLIENT_ID from .env.");
         if (!googleClientSecret)
-            throw new Error("Missing GOOGLE_CLIENT_SECRET from .env for local development.");
+            throw new Error("Missing GOOGLE_CLIENT_SECRET from .env.");
         if (!googleRefreshToken)
-            throw new Error("Missing GOOGLE_REFRESH_TOKEN from .env for local development.");
+            throw new Error("Missing GOOGLE_REFRESH_TOKEN from .env.");
         if (!airtableApiKey)
-            throw new Error("Missing AIRTABLE_API_KEY from .env for local development.");
+            throw new Error("Missing AIRTABLE_API_KEY from .env.");
         if (!geminiApiKey)
-            throw new Error("Missing GEMINI_API_KEY from .env for local development.");
+            throw new Error("Missing GEMINI_API_KEY from .env.");
         return {
             googleClientId,
             googleClientSecret,
@@ -115,7 +123,7 @@ async function loadConfig() {
 // Por lo tanto, el siguiente bloque que carga los secretos directamente ya no es necesario aquí
 // ya que está dentro de la lógica condicional de loadConfig.
 /*
-*/
+ */
 // Exportamos una función que devuelve una promesa con la configuración inicializada.
 // Esto asegura que la configuración se carga asíncronamente antes de ser usada.
 let loadedConfig = null;

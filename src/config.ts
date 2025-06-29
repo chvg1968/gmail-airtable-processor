@@ -47,22 +47,11 @@ async function loadConfig(): Promise<AppConfig> {
     process.env.GCP_PROJECT
   );
 
-  // Variables de entorno para configuración no sensible (siempre se leen de process.env)
-  const airtableBaseId = process.env.AIRTABLE_BASE_ID;
-  const airtableTableName = process.env.AIRTABLE_TABLE_NAME;
-  // const startDate = process.env.START_DATE || "2025-06-01"; // Ya no se usa startDate de config
-
-  if (!airtableBaseId)
-    throw new Error("Missing AIRTABLE_BASE_ID environment variable.");
-  if (!airtableTableName)
-    throw new Error("Missing AIRTABLE_TABLE_NAME environment variable.");
-
   if (isCloudEnvironment) {
     logger.debug(
-      "INFO: Detectado entorno de nube. Cargando secretos desde Secret Manager...",
+      "INFO: Detectado entorno de nube. Cargando secretos y configuración desde Secret Manager...",
     );
 
-    // Forma robusta de obtener el Project ID usando la librería cliente.
     const projectId = await client.getProjectId();
     if (!projectId) {
       throw new Error(
@@ -70,27 +59,28 @@ async function loadConfig(): Promise<AppConfig> {
       );
     }
 
-    // Secretos cargados desde Secret Manager
-    const googleClientId = await getSecretValue(
-      "gmail_airtable_processor_oauth_client_id",
-      projectId,
-    );
-    const googleClientSecret = await getSecretValue(
-      "gmail_airtable_processor_oauth_client_secret",
-      projectId,
-    );
-    const googleRefreshToken = await getSecretValue(
-      "gmail_airtable_processor_gmail_refresh_token",
-      projectId,
-    );
-    const airtableApiKey = await getSecretValue(
-      "gmail_airtable_processor_airtable_api_key",
-      projectId,
-    );
-    const geminiApiKey = await getSecretValue(
-      "gmail_airtable_processor_gemini_api_key",
-      projectId,
-    );
+    // Cargar secretos y configuración desde Secret Manager
+    const [
+      googleClientId,
+      googleClientSecret,
+      googleRefreshToken,
+      airtableApiKey,
+      geminiApiKey,
+      airtableTableName, // Cargar desde Secret Manager
+    ] = await Promise.all([
+      getSecretValue("gmail_airtable_processor_oauth_client_id", projectId),
+      getSecretValue("gmail_airtable_processor_oauth_client_secret", projectId),
+      getSecretValue("gmail_airtable_processor_gmail_refresh_token", projectId),
+      getSecretValue("gmail_airtable_processor_airtable_api_key", projectId),
+      getSecretValue("gmail_airtable_processor_gemini_api_key", projectId),
+      getSecretValue("AIRTABLE_TABLE_NAME", projectId), // Nombre del secreto
+    ]);
+
+    // AIRTABLE_BASE_ID puede seguir viniendo de las variables de entorno
+    const airtableBaseId = process.env.AIRTABLE_BASE_ID;
+    if (!airtableBaseId) {
+      throw new Error("Missing AIRTABLE_BASE_ID environment variable.");
+    }
 
     return {
       googleClientId,
@@ -103,35 +93,25 @@ async function loadConfig(): Promise<AppConfig> {
     };
   } else {
     logger.debug(
-      "INFO: Detectado entorno local. Cargando secretos desde variables de entorno (.env)...",
+      "INFO: Detectado entorno local. Cargando configuración desde variables de entorno (.env)...",
     );
-    // Cargar secretos desde variables de entorno para desarrollo local
+    // Cargar configuración y secretos desde variables de entorno para desarrollo local
+    const airtableBaseId = process.env.AIRTABLE_BASE_ID;
+    const airtableTableName = process.env.AIRTABLE_TABLE_NAME;
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN;
     const airtableApiKey = process.env.AIRTABLE_API_KEY;
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!googleClientId)
-      throw new Error(
-        "Missing GOOGLE_CLIENT_ID from .env for local development.",
-      );
-    if (!googleClientSecret)
-      throw new Error(
-        "Missing GOOGLE_CLIENT_SECRET from .env for local development.",
-      );
-    if (!googleRefreshToken)
-      throw new Error(
-        "Missing GOOGLE_REFRESH_TOKEN from .env for local development.",
-      );
-    if (!airtableApiKey)
-      throw new Error(
-        "Missing AIRTABLE_API_KEY from .env for local development.",
-      );
-    if (!geminiApiKey)
-      throw new Error(
-        "Missing GEMINI_API_KEY from .env for local development.",
-      );
+    // Validaciones
+    if (!airtableBaseId) throw new Error("Missing AIRTABLE_BASE_ID from .env.");
+    if (!airtableTableName) throw new Error("Missing AIRTABLE_TABLE_NAME from .env.");
+    if (!googleClientId) throw new Error("Missing GOOGLE_CLIENT_ID from .env.");
+    if (!googleClientSecret) throw new Error("Missing GOOGLE_CLIENT_SECRET from .env.");
+    if (!googleRefreshToken) throw new Error("Missing GOOGLE_REFRESH_TOKEN from .env.");
+    if (!airtableApiKey) throw new Error("Missing AIRTABLE_API_KEY from .env.");
+    if (!geminiApiKey) throw new Error("Missing GEMINI_API_KEY from .env.");
 
     return {
       googleClientId,
