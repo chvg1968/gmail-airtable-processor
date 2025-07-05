@@ -556,7 +556,7 @@ function processEmails() {
           const extractNameFromSubject = (subject) => {
             const vrboMatch = subject.match(/from\s+([^:]+):/i);
             if (vrboMatch && vrboMatch[1]) return toTitleCase(vrboMatch[1].trim());
-            const airbnbMatch = subject.match(/ - ([^-]+?) (?:arrives|llega)/i) || subject.match(/ - ([^-]+)$/i);
+            const airbnbMatch = subject.match(/ - (.+?) (?:arrives|llega)/i) || subject.match(/ - (.+)$/i);
             return airbnbMatch && airbnbMatch[1] ? toTitleCase(airbnbMatch[1].trim()) : null;
           };
           const nameFromSubject = extractNameFromSubject(subject);
