@@ -554,10 +554,24 @@ function processEmails() {
         if (extractedData) {
           const subject = message.getSubject();
           const extractNameFromSubject = (subject) => {
+            // Vrbo: "Instant Booking from Natasha Schooling: ..."
             const vrboMatch = subject.match(/from\s+([^:]+):/i);
-            if (vrboMatch && vrboMatch[1]) return toTitleCase(vrboMatch[1].trim());
-            const airbnbMatch = subject.match(/ - (.+?) (?:arrives|llega)/i) || subject.match(/ - (.+)$/i);
-            return airbnbMatch && airbnbMatch[1] ? toTitleCase(airbnbMatch[1].trim()) : null;
+            if (vrboMatch && vrboMatch[1]) {
+              return toTitleCase(vrboMatch[1].trim());
+            }
+
+            // Airbnb: "Reservation confirmed - Rosemary Vega-Chang arrives Aug 3"
+            // We split by " - " and take the second part, then split by " arrives " or " llega "
+            const parts = subject.split(' - ');
+            if (parts.length > 1) {
+              const potentialNameAndDate = parts[1];
+              const nameParts = potentialNameAndDate.split(/ (?:arrives|llega)/i);
+              if (nameParts.length > 0) {
+                return toTitleCase(nameParts[0].trim());
+              }
+            }
+            
+            return null; // Return null if no pattern matches
           };
           const nameFromSubject = extractNameFromSubject(subject);
 
