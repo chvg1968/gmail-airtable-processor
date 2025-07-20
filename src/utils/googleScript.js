@@ -1,4 +1,3 @@
-
 /**
  * @OnlyCurrentDoc
  */
@@ -21,10 +20,10 @@
 function getConfiguration() {
   const scriptProperties = PropertiesService.getScriptProperties();
   const config = {
-    airtableApiKey: scriptProperties.getProperty('AIRTABLE_API_KEY'),
-    airtableBaseId: scriptProperties.getProperty('AIRTABLE_BASE_ID'),
-    airtableTableName: scriptProperties.getProperty('AIRTABLE_TABLE_NAME'),
-    geminiApiKey: scriptProperties.getProperty('GEMINI_API_KEY'),
+    airtableApiKey: scriptProperties.getProperty("AIRTABLE_API_KEY"),
+    airtableBaseId: scriptProperties.getProperty("AIRTABLE_BASE_ID"),
+    airtableTableName: scriptProperties.getProperty("AIRTABLE_TABLE_NAME"),
+    geminiApiKey: scriptProperties.getProperty("GEMINI_API_KEY"),
   };
 
   for (const key in config) {
@@ -36,8 +35,29 @@ function getConfiguration() {
 }
 
 // =================================================================================
-// SECTION 2: DATA MAPPINGS
+// SECTION 2: CONSTANTS & DATA MAPPINGS
 // =================================================================================
+
+// Constantes de configuración
+const CONSTANTS = {
+  DATE_REVIEW: {
+    MAX_DAYS_AHEAD: 330,
+    FUTURE_YEAR_THRESHOLD: 2026,
+  },
+  EMAIL_SEARCH: {
+    DAYS_BACK: 2,
+  },
+  AIRTABLE: {
+    DEFAULT_CHECKIN_TIME: "15:00:00",
+    DEFAULT_CHECKOUT_TIME: "10:00:00",
+  },
+  GEMINI: {
+    TEMPERATURE: 0.2,
+    TOP_P: 0.9,
+    TOP_K: 40,
+    MAX_OUTPUT_TOKENS: 1024,
+  },
+};
 
 /**
  * Mapeos de propiedades para Vrbo y Airbnb.
@@ -77,8 +97,88 @@ const AIRBNB_PROPERTY_MAPPINGS = [
 ];
 
 // =================================================================================
-// SECTION 3: UTILITY FUNCTIONS
+// SECTION 3: HTTP & API UTILITIES
 // =================================================================================
+
+/**
+ * Realiza una petición HTTP con manejo de errores estandarizado.
+ * @param {string} url La URL de la petición.
+ * @param {Object} options Las opciones de la petición.
+ * @param {string} context Contexto para logging de errores.
+ * @returns {Object|null} La respuesta parseada o null en caso de error.
+ */
+function makeHttpRequest(url, options, context) {
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (responseCode >= 400) {
+      Logger.log(`Error en ${context} (HTTP ${responseCode}): ${responseText}`);
+      return null;
+    }
+
+    return JSON.parse(responseText);
+  } catch (error) {
+    Logger.log(`Error en ${context}: ${error.toString()}`);
+    return null;
+  }
+}
+
+/**
+ * Construye las opciones estándar para peticiones a Airtable.
+ * @param {string} apiKey La clave de API de Airtable.
+ * @param {string} method El método HTTP.
+ * @param {Object} [payload] El payload para métodos POST/PATCH.
+ * @returns {Object} Las opciones de la petición.
+ */
+function buildAirtableOptions(apiKey, method, payload = null) {
+  const options = {
+    method: method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    muteHttpExceptions: true,
+  };
+
+  if (payload) {
+    options.contentType = "application/json";
+    options.payload = JSON.stringify(payload);
+  }
+
+  return options;
+}
+
+// =================================================================================
+// SECTION 5: UTILITY FUNCTIONS
+// =================================================================================
+
+/**
+ * Formatea un número de teléfono al formato (XXX) XXX-XXXX.
+ * @param {string|null} phoneNumber El número de teléfono sin formato.
+ * @returns {string|null} El número formateado o null si no es válido.
+ */
+function formatPhoneNumber(phoneNumber) {
+  if (!phoneNumber) {
+    return null;
+  }
+
+  // Remover todos los caracteres que no sean dígitos
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+
+  // Verificar si tiene el formato correcto (10 dígitos para US o 11 con código de país)
+  if (digitsOnly.length === 10) {
+    // Formato: (XXX) XXX-XXXX
+    return `(${digitsOnly.slice(0, 3)}) ${digitsOnly.slice(3, 6)}-${digitsOnly.slice(6)}`;
+  } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+    // Remover el código de país '1' y formatear
+    const phoneWithoutCountryCode = digitsOnly.slice(1);
+    return `(${phoneWithoutCountryCode.slice(0, 3)}) ${phoneWithoutCountryCode.slice(3, 6)}-${phoneWithoutCountryCode.slice(6)}`;
+  }
+
+  // Si no coincide con los formatos esperados, devolver el número original
+  return phoneNumber;
+}
 
 /**
  * Convierte una cadena a "Title Case".
@@ -148,10 +248,40 @@ function adjustArrivalYear(arrivalDate, bookingDate) {
   const booking = new Date(bookingDate);
   const arrivalThisYear = new Date(`${arrivalDate} ${booking.getFullYear()}`);
   if (arrivalThisYear < booking) {
-    const arrivalNextYear = new Date(`${arrivalDate} ${booking.getFullYear() + 1}`);
+    const arrivalNextYear = new Date(
+      `${arrivalDate} ${booking.getFullYear() + 1}`
+    );
     return arrivalNextYear.toISOString().slice(0, 10);
   }
   return arrivalThisYear.toISOString().slice(0, 10);
+}
+
+/**
+ * Calcula si una reserva necesita revisión de fechas.
+ * @param {string} platform La plataforma de la reserva.
+ * @param {string} checkInDate La fecha de check-in.
+ * @param {string} bookingDate La fecha de reserva.
+ * @returns {boolean} True si necesita revisión.
+ */
+function calculateNeedsDateReview(platform, checkInDate, bookingDate) {
+  try {
+    if (platform.toLowerCase() !== "airbnb") return false;
+    if (!checkInDate) return false;
+
+    const checkIn = new Date(checkInDate);
+    const booking = bookingDate ? new Date(bookingDate) : new Date();
+    const daysDifference = Math.ceil(
+      (checkIn.getTime() - booking.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    return (
+      daysDifference < 0 ||
+      checkIn.getFullYear() === CONSTANTS.DATE_REVIEW.FUTURE_YEAR_THRESHOLD ||
+      daysDifference > CONSTANTS.DATE_REVIEW.MAX_DAYS_AHEAD
+    );
+  } catch (error) {
+    return false;
+  }
 }
 
 /**
@@ -185,72 +315,126 @@ function formatDateForAirtable(dateString, hourString) {
   }
 }
 
+// =================================================================================
+// SECTION 5: PLATFORM STRATEGY PATTERN
+// =================================================================================
+
+/**
+ * Estrategias para el manejo de diferentes plataformas.
+ */
+const PlatformStrategies = {
+  /**
+   * Normaliza el nombre de la plataforma.
+   * @param {string | undefined | null} platform La plataforma extraída.
+   * @returns {string} El nombre normalizado de la plataforma.
+   */
+  normalize(platform) {
+    const platformLower = platform?.toLowerCase() || "desconocido";
+    if (platformLower.includes("vrbo") || platformLower.includes("homeaway"))
+      return "Vrbo";
+    if (platformLower.includes("airbnb")) return "Airbnb";
+    return "Desconocido";
+  },
+
+  /**
+   * Estrategia para mapeo de propiedades de Airbnb.
+   * @param {string} accommodationName El nombre de la propiedad.
+   * @returns {string|null} El nombre mapeado o el original.
+   */
+  airbnb: {
+    mapProperty(accommodationName) {
+      if (!accommodationName) return null;
+      const lowerAccommodationName = accommodationName.toLowerCase();
+      const mapping = AIRBNB_PROPERTY_MAPPINGS.find((m) => {
+        const aliasLower = m.alias.toLowerCase();
+        return (
+          lowerAccommodationName.includes(aliasLower) ||
+          aliasLower.includes(lowerAccommodationName)
+        );
+      });
+      return mapping ? mapping.name : accommodationName;
+    },
+  },
+
+  /**
+   * Estrategia para mapeo de propiedades de Vrbo.
+   * @param {string} accommodationName El nombre de la propiedad.
+   * @param {string} propertyCode El código de la propiedad.
+   * @returns {string|null} El nombre mapeado o el código limpio.
+   */
+  vrbo: {
+    mapProperty(accommodationName, propertyCode) {
+      let candidate = null;
+      let cleanPropertyCode = null;
+
+      if (propertyCode) {
+        cleanPropertyCode = propertyCode.replace("#", "");
+        const mappingByCode = VRBO_PROPERTY_MAPPINGS.find(
+          (m) => m.code === cleanPropertyCode
+        );
+        candidate = mappingByCode ? mappingByCode.name : null;
+      }
+
+      if (!candidate && accommodationName) {
+        const lowerName = accommodationName.toLowerCase();
+        const matchByAlias = AIRBNB_PROPERTY_MAPPINGS.find((m) => {
+          const aliasLower = m.alias.toLowerCase();
+          return (
+            lowerName.includes(aliasLower) || aliasLower.includes(lowerName)
+          );
+        });
+        candidate = matchByAlias ? matchByAlias.name : null;
+      }
+
+      return candidate ?? cleanPropertyCode;
+    },
+  },
+};
+
 /**
  * Normaliza el nombre de la plataforma.
  * @param {string | undefined | null} platform La plataforma extraída.
  * @returns {string} El nombre normalizado de la plataforma.
  */
 function normalizePlatform(platform) {
-  const p = platform?.toLowerCase() || "desconocido";
-  if (p.includes("vrbo") || p.includes("homeaway")) return "Vrbo";
-  if (p.includes("airbnb")) return "Airbnb";
-  return "Desconocido";
+  return PlatformStrategies.normalize(platform);
 }
 
 /**
- * Busca el nombre de la propiedad mapeada.
+ * Busca el nombre de la propiedad mapeada usando el patrón Strategy.
  * @param {string | null | undefined} accommodationNameFromGemini El nombre de la propiedad extraído.
  * @param {string | null | undefined} propertyCodeVrboFromGemini El código de la propiedad de Vrbo.
  * @param {string | null | undefined} platform La plataforma.
  * @returns {string | null} El nombre de la propiedad mapeado o null.
  */
-function findPropertyMapping(accommodationNameFromGemini, propertyCodeVrboFromGemini, platform) {
+function findPropertyMapping(
+  accommodationNameFromGemini,
+  propertyCodeVrboFromGemini,
+  platform
+) {
   if (!platform) {
     return accommodationNameFromGemini || propertyCodeVrboFromGemini || null;
   }
 
-  const lowerPlatform = platform.toLowerCase();
+  const normalizedPlatform = PlatformStrategies.normalize(platform);
 
-  if (lowerPlatform.includes("airbnb")) {
-    if (!accommodationNameFromGemini) return null;
-    const lowerAccommodationName = accommodationNameFromGemini.toLowerCase();
-    const mapping = AIRBNB_PROPERTY_MAPPINGS.find((m) => {
-      const aliasLower = m.alias.toLowerCase();
-      return (
-        lowerAccommodationName.includes(aliasLower) ||
-        aliasLower.includes(lowerAccommodationName)
+  switch (normalizedPlatform) {
+    case "Airbnb":
+      return PlatformStrategies.airbnb.mapProperty(accommodationNameFromGemini);
+
+    case "Vrbo":
+      return PlatformStrategies.vrbo.mapProperty(
+        accommodationNameFromGemini,
+        propertyCodeVrboFromGemini
       );
-    });
-    return mapping ? mapping.name : accommodationNameFromGemini;
-  } else if (
-    lowerPlatform.includes("vrbo") ||
-    lowerPlatform.includes("homeaway")
-  ) {
-    let candidate = null;
-    let cleanPropertyCode = null;
-    if (propertyCodeVrboFromGemini) {
-      cleanPropertyCode = propertyCodeVrboFromGemini.replace("#", "");
-      const mappingByCode = VRBO_PROPERTY_MAPPINGS.find((m) => m.code === cleanPropertyCode);
-      candidate = mappingByCode ? mappingByCode.name : null;
-    }
-    if (!candidate && accommodationNameFromGemini) {
-      const lowerName = accommodationNameFromGemini.toLowerCase();
-      const matchByAlias = AIRBNB_PROPERTY_MAPPINGS.find((m) => {
-        const aliasLower = m.alias.toLowerCase();
-        return (
-          lowerName.includes(aliasLower) || aliasLower.includes(lowerName)
-        );
-      });
-      candidate = matchByAlias ? matchByAlias.name : null;
-    }
-    return candidate ?? cleanPropertyCode;
-  }
 
-  return accommodationNameFromGemini || propertyCodeVrboFromGemini || null;
+    default:
+      return accommodationNameFromGemini || propertyCodeVrboFromGemini || null;
+  }
 }
 
 // =================================================================================
-// SECTION 4: EXTERNAL API SERVICES (GEMINI & AIRTABLE)
+// SECTION 6: EXTERNAL API SERVICES (GEMINI & AIRTABLE)
 // =================================================================================
 
 /**
@@ -279,6 +463,7 @@ function buildPrompt(emailBody, referenceYear) {
     - accommodationPrice: The total price for the entire stay, before any fees or taxes. For Airbnb, if you see a pattern like '$X.XX x N nights' or 'Accommodation: $X.XX x N nights', multiply to get the total (e.g., $894.00 x 4 nights = $3,576.00). If both total and per-night prices are present, always return the total. If only per-night and number of nights are present, multiply them.
     - adults: The number of adults.
     - children: The number of children.
+    - guestPhone: The phone number of the guest. For Vrbo emails, look for "Traveler Phone" field in the booking details section (e.g., "+1 3059925466"). For Airbnb, extract any phone number present in the guest contact information. If not found, return null.
     - bookingDate: The date when the booking confirmation email was originally sent. For Airbnb, if the email is a forward, search for a header block that starts with '---------- Forwarded message ---------' and extract the line starting with 'Date:'. For Vrbo, use the earliest date present in the email body that looks like a confirmation or booking date (e.g., from a header or from the booking details section). Always return the date in YYYY-MM-DD format. If not found, use the oldest date present in the email body. Prioritize the original Airbnb header date over any forward date or processing date.
     - discountAmount: Any discount applied.
     - cleaningFee: The cleaning fee.
@@ -313,17 +498,17 @@ function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: 0.2,
-      topP: 0.9,
-      topK: 40,
-      maxOutputTokens: 1024,
+      temperature: CONSTANTS.GEMINI.TEMPERATURE,
+      topP: CONSTANTS.GEMINI.TOP_P,
+      topK: CONSTANTS.GEMINI.TOP_K,
+      maxOutputTokens: CONSTANTS.GEMINI.MAX_OUTPUT_TOKENS,
       responseMimeType: "application/json",
     },
   };
 
   const options = {
-    method: 'post',
-    contentType: 'application/json',
+    method: "post",
+    contentType: "application/json",
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   };
@@ -358,30 +543,18 @@ function extractBookingInfoFromEmail(emailBody, apiKey, referenceYear) {
 function isMessageProcessed(messageId, config) {
   const formula = `{Gmail Message ID} = "${messageId}"`;
   const url = `https://api.airtable.com/v0/${config.airtableBaseId}/${encodeURIComponent(config.airtableTableName)}?filterByFormula=${encodeURIComponent(formula)}`;
-  const options = {
-    method: 'get',
-    headers: {
-      Authorization: `Bearer ${config.airtableApiKey}`,
-    },
-    muteHttpExceptions: true,
-  };
+  const options = buildAirtableOptions(config.airtableApiKey, "get");
 
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const responseCode = response.getResponseCode();
-    const responseBody = response.getContentText();
-
-    if (responseCode >= 400) {
-      Logger.log(`Error checking Airtable (HTTP ${responseCode}): ${responseBody}`);
-      return false; // Asumir que no está procesado si hay un error de API
-    }
-
-    const data = JSON.parse(responseBody);
-    return data.records && data.records.length > 0;
-  } catch (error) {
-    Logger.log(`Error during Airtable check for messageId ${messageId}: ${error.toString()}`);
-    return false; // Asumir que no está procesado si hay un error
+  const data = makeHttpRequest(
+    url,
+    options,
+    `verificación de mensaje procesado ${messageId}`
+  );
+  if (!data) {
+    return false; // Asumir que no está procesado si hay un error de API
   }
+
+  return data.records && data.records.length > 0;
 }
 
 /**
@@ -399,26 +572,40 @@ function upsertBookingToAirtable(rawData, config, messageId) {
     platform
   );
 
-  const clubFee = typeof rawData.clubFee === 'number' ? rawData.clubFee : 0;
+  const clubFee = typeof rawData.clubFee === "number" ? rawData.clubFee : 0;
   let accommodationPrice = rawData.accommodationPrice ?? 0;
   if (platform === "Vrbo") {
     accommodationPrice += clubFee;
   }
 
-  const baseCommission = typeof rawData.baseCommissionOrHostFee === 'number' ? rawData.baseCommissionOrHostFee : null;
-  const paymentProcessingFees = typeof rawData.paymentProcessingFee === 'number' ? rawData.paymentProcessingFee : null;
-  const vrboReviewNeeded = platform === "Vrbo" && !(baseCommission && paymentProcessingFees);
+  const baseCommission =
+    typeof rawData.baseCommissionOrHostFee === "number"
+      ? rawData.baseCommissionOrHostFee
+      : null;
+  const paymentProcessingFees =
+    typeof rawData.paymentProcessingFee === "number"
+      ? rawData.paymentProcessingFee
+      : null;
+  const vrboReviewNeeded =
+    platform === "Vrbo" && !(baseCommission && paymentProcessingFees);
 
   const airtableFields = {
     "Full Name": rawData.guestName,
     Platform: platform,
     "Reservation number": rawData.reservationNumber,
-    Arrival: formatDateForAirtable(rawData.checkInDate, "15:00:00"),
-    "Departure Date": formatDateForAirtable(rawData.checkOutDate, "10:00:00"),
+    Arrival: formatDateForAirtable(
+      rawData.checkInDate,
+      CONSTANTS.AIRTABLE.DEFAULT_CHECKIN_TIME
+    ),
+    "Departure Date": formatDateForAirtable(
+      rawData.checkOutDate,
+      CONSTANTS.AIRTABLE.DEFAULT_CHECKOUT_TIME
+    ),
     Property: propertyName,
     Accommodation: accommodationPrice,
     Adults: rawData.adults ?? 0,
     Children: rawData.children ?? 0,
+    "Phone Number": formatPhoneNumber(rawData.guestPhone),
     "Booking Date": rawData.bookingDate || null,
     Discount: rawData.discountAmount ?? 0,
     "Cleaning Fee": rawData.cleaningFee ?? 0,
@@ -426,21 +613,14 @@ function upsertBookingToAirtable(rawData, config, messageId) {
     Taxes: rawData.taxesAmount ?? 0,
     "D. Protection": rawData.damageProtectionFee ?? 0,
     "Vrbo value 1 or Airbnb value": baseCommission ?? 0,
-    "Vrbo value 2": rawData.paymentProcessingFee === "TBD" ? 0 : (paymentProcessingFees ?? 0),
+    "Vrbo value 2":
+      rawData.paymentProcessingFee === "TBD" ? 0 : (paymentProcessingFees ?? 0),
     "Gmail Message ID": messageId,
-    "Needs Date Review": (() => {
-      try {
-        if (platform.toLowerCase() !== "airbnb") return false;
-        if (!rawData.checkInDate) return false;
-        const checkIn = new Date(rawData.checkInDate);
-        const bookingDate = rawData.bookingDate ? new Date(rawData.bookingDate) : new Date();
-        const days = Math.ceil((checkIn.getTime() - bookingDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (days < 0 || checkIn.getFullYear() === 2026 || days > 330) return true;
-        return false;
-      } catch (error) {
-        return false;
-      }
-    })(),
+    "Needs Date Review": calculateNeedsDateReview(
+      platform,
+      rawData.checkInDate,
+      rawData.bookingDate
+    ),
     "Vrbo Review": vrboReviewNeeded,
   };
 
@@ -458,49 +638,147 @@ function upsertBookingToAirtable(rawData, config, messageId) {
 
   const filterFormula = `AND({Reservation number} = "${reservationNumberToSearch.replace(/"/g, '\\"')}", {Platform} = "${platform}")`;
   const getUrl = `https://api.airtable.com/v0/${config.airtableBaseId}/${encodeURIComponent(config.airtableTableName)}?filterByFormula=${encodeURIComponent(filterFormula)}`;
-  const getOptions = {
-    method: 'get',
-    headers: { Authorization: `Bearer ${config.airtableApiKey}` },
-    muteHttpExceptions: true,
-  };
+  const getOptions = buildAirtableOptions(config.airtableApiKey, "get");
 
-  try {
-    const getResponse = UrlFetchApp.fetch(getUrl, getOptions);
-    const existingRecords = JSON.parse(getResponse.getContentText()).records;
-
-    if (existingRecords && existingRecords.length > 0) {
-      const recordId = existingRecords[0].id;
-      Logger.log(`Updating existing reservation in Airtable: ${reservationNumberToSearch}`);
-      const patchUrl = `https://api.airtable.com/v0/${config.airtableBaseId}/${encodeURIComponent(config.airtableTableName)}/${recordId}`;
-      const patchOptions = {
-        method: 'patch',
-        contentType: 'application/json',
-        headers: { Authorization: `Bearer ${config.airtableApiKey}` },
-        payload: JSON.stringify({ fields: airtableFields }),
-      };
-      UrlFetchApp.fetch(patchUrl, patchOptions);
-      Logger.log("Update successful.");
-    } else {
-      Logger.log(`Creating new reservation in Airtable: ${reservationNumberToSearch}`);
-      const postUrl = `https://api.airtable.com/v0/${config.airtableBaseId}/${encodeURIComponent(config.airtableTableName)}`;
-      const postOptions = {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: `Bearer ${config.airtableApiKey}` },
-        payload: JSON.stringify({ records: [{ fields: airtableFields }] }),
-      };
-      UrlFetchApp.fetch(postUrl, postOptions);
-      Logger.log("Creation successful.");
-    }
-    return true;
-  } catch (error) {
-    Logger.log(`Error upserting to Airtable for ${reservationNumberToSearch}: ${error}`);
+  const existingData = makeHttpRequest(
+    getUrl,
+    getOptions,
+    `búsqueda de reserva existente ${reservationNumberToSearch}`
+  );
+  if (!existingData) {
     return false;
   }
+
+  const existingRecords = existingData.records;
+  const baseUrl = `https://api.airtable.com/v0/${config.airtableBaseId}/${encodeURIComponent(config.airtableTableName)}`;
+
+  if (existingRecords && existingRecords.length > 0) {
+    // Actualizar registro existente
+    const recordId = existingRecords[0].id;
+    Logger.log(
+      `Updating existing reservation in Airtable: ${reservationNumberToSearch}`
+    );
+    const patchUrl = `${baseUrl}/${recordId}`;
+    const patchOptions = buildAirtableOptions(config.airtableApiKey, "patch", {
+      fields: airtableFields,
+    });
+    const updateResult = makeHttpRequest(
+      patchUrl,
+      patchOptions,
+      `actualización de reserva ${reservationNumberToSearch}`
+    );
+    if (updateResult) {
+      Logger.log("Update successful.");
+      return true;
+    }
+  } else {
+    // Crear nuevo registro
+    Logger.log(
+      `Creating new reservation in Airtable: ${reservationNumberToSearch}`
+    );
+    const postOptions = buildAirtableOptions(config.airtableApiKey, "post", {
+      records: [{ fields: airtableFields }],
+    });
+    const createResult = makeHttpRequest(
+      baseUrl,
+      postOptions,
+      `creación de reserva ${reservationNumberToSearch}`
+    );
+    if (createResult) {
+      Logger.log("Creation successful.");
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // =================================================================================
-// SECTION 5: MAIN PROCESSING LOGIC
+// SECTION 7: EMAIL PROCESSING HELPERS
+// =================================================================================
+
+/**
+ * Construye la consulta de búsqueda de Gmail.
+ * @param {string} searchSinceDateString La fecha desde la cual buscar.
+ * @returns {string} La consulta de búsqueda.
+ */
+function buildGmailSearchQuery(searchSinceDateString) {
+  return `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
+}
+
+/**
+ * Calcula la fecha de búsqueda basada en días hacia atrás.
+ * @returns {string} La fecha formateada para búsqueda.
+ */
+function calculateSearchDate() {
+  const searchDate = new Date();
+  searchDate.setDate(searchDate.getDate() - CONSTANTS.EMAIL_SEARCH.DAYS_BACK);
+  return `${searchDate.getFullYear()}/${String(searchDate.getMonth() + 1).padStart(2, "0")}/${String(searchDate.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Extrae el nombre del huésped desde el asunto del email.
+ * @param {string} subject El asunto del email.
+ * @returns {string|null} El nombre extraído o null.
+ */
+function extractGuestNameFromSubject(subject) {
+  // Vrbo: "Instant Booking from Natasha Schooling: ..."
+  const vrboMatch = subject.match(/from\s+([^:]+):/i);
+  if (vrboMatch && vrboMatch[1]) {
+    return toTitleCase(vrboMatch[1].trim());
+  }
+
+  // Airbnb: "Reservation confirmed - Rosemary Vega-Chang arrives Aug 3"
+  const parts = subject.split(" - ");
+  if (parts.length > 1) {
+    const potentialNameAndDate = parts[1];
+    const nameParts = potentialNameAndDate.split(/ (?:arrives|llega)/i);
+    if (nameParts.length > 0) {
+      return toTitleCase(nameParts[0].trim());
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Mejora los datos extraídos con información adicional del email.
+ * @param {Object} extractedData Los datos extraídos por Gemini.
+ * @param {Object} message El mensaje de Gmail.
+ * @returns {Object} Los datos mejorados.
+ */
+function enhanceExtractedData(extractedData, message) {
+  const subject = message.getSubject();
+  const nameFromSubject = extractGuestNameFromSubject(subject);
+
+  // Mejorar el nombre del huésped
+  if (!extractedData.guestName && nameFromSubject) {
+    extractedData.guestName = nameFromSubject;
+  } else if (
+    extractedData.guestName &&
+    !extractedData.guestName.includes(" ") &&
+    nameFromSubject &&
+    nameFromSubject
+      .toLowerCase()
+      .startsWith(extractedData.guestName.toLowerCase()) &&
+    nameFromSubject.includes(" ")
+  ) {
+    extractedData.guestName = nameFromSubject;
+  }
+
+  // Mejorar la fecha de reserva si no existe
+  if (!extractedData.bookingDate) {
+    const headerDate = message.getDate();
+    if (headerDate && !isNaN(headerDate.getTime())) {
+      extractedData.bookingDate = headerDate.toISOString().slice(0, 10);
+    }
+  }
+
+  return extractedData;
+}
+
+// =================================================================================
+// SECTION 8: MAIN PROCESSING LOGIC
 // =================================================================================
 
 /**
@@ -518,15 +796,12 @@ function processEmails() {
   Logger.log("Starting Gmail-Airtable email processor...");
 
   try {
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    const searchSinceDateString = `${twoDaysAgo.getFullYear()}/${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}/${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
-
+    const searchSinceDateString = calculateSearchDate();
     Logger.log(`Searching emails since ${searchSinceDateString}`);
-    const query = `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
-    
+
+    const query = buildGmailSearchQuery(searchSinceDateString);
     const threads = GmailApp.search(query);
-    const messages = threads.flatMap(thread => thread.getMessages());
+    const messages = threads.flatMap((thread) => thread.getMessages());
     Logger.log(`Found ${messages.length} emails.`);
 
     const processedReservations = new Set();
@@ -541,64 +816,49 @@ function processEmails() {
         Logger.log(`--- Processing email (ID: ${messageId}) ---`);
 
         if (isMessageProcessed(messageId, config)) {
-          Logger.log(`SKIPPED: Email already processed (messageId=${messageId}).`);
+          Logger.log(
+            `SKIPPED: Email already processed (messageId=${messageId}).`
+          );
           skippedCount++;
           continue;
         }
 
         const emailBody = message.getBody();
         const cleanedBody = stripForwardHeaders(emailBody);
-        
-        const extractedData = extractBookingInfoFromEmail(cleanedBody, config.geminiApiKey, new Date().getFullYear());
+
+        let extractedData = extractBookingInfoFromEmail(
+          cleanedBody,
+          config.geminiApiKey,
+          new Date().getFullYear()
+        );
 
         if (extractedData) {
-          const subject = message.getSubject();
-          const extractNameFromSubject = (subject) => {
-            // Vrbo: "Instant Booking from Natasha Schooling: ..."
-            const vrboMatch = subject.match(/from\s+([^:]+):/i);
-            if (vrboMatch && vrboMatch[1]) {
-              return toTitleCase(vrboMatch[1].trim());
-            }
-
-            // Airbnb: "Reservation confirmed - Rosemary Vega-Chang arrives Aug 3"
-            // We split by " - " and take the second part, then split by " arrives " or " llega "
-            const parts = subject.split(' - ');
-            if (parts.length > 1) {
-              const potentialNameAndDate = parts[1];
-              const nameParts = potentialNameAndDate.split(/ (?:arrives|llega)/i);
-              if (nameParts.length > 0) {
-                return toTitleCase(nameParts[0].trim());
-              }
-            }
-            
-            return null; // Return null if no pattern matches
-          };
-          const nameFromSubject = extractNameFromSubject(subject);
-
-          if (!extractedData.guestName && nameFromSubject) {
-            extractedData.guestName = nameFromSubject;
-          } else if (extractedData.guestName && !extractedData.guestName.includes(" ") && nameFromSubject && nameFromSubject.toLowerCase().startsWith(extractedData.guestName.toLowerCase()) && nameFromSubject.includes(" ")) {
-            extractedData.guestName = nameFromSubject;
-          }
-
-          if (!extractedData.bookingDate) {
-            const headerDate = message.getDate();
-            if (headerDate && !isNaN(headerDate.getTime())) {
-              extractedData.bookingDate = headerDate.toISOString().slice(0, 10);
-            }
-          }
+          extractedData = enhanceExtractedData(extractedData, message);
         }
 
         if (!extractedData || !extractedData.reservationNumber) {
-          Logger.log(`SKIPPED: Could not extract reservation number from messageId=${messageId}.`);
+          Logger.log(
+            `SKIPPED: Could not extract reservation number from messageId=${messageId}.`
+          );
           skippedCount++;
           continue;
         }
 
-        const platformStr = Array.isArray(extractedData.platform) ? extractedData.platform[0] : extractedData.platform;
-        if (platformStr && typeof platformStr === 'string' && platformStr.toLowerCase() === 'airbnb' && extractedData.checkInDate && extractedData.bookingDate) {
+        const platformStr = Array.isArray(extractedData.platform)
+          ? extractedData.platform[0]
+          : extractedData.platform;
+        if (
+          platformStr &&
+          typeof platformStr === "string" &&
+          platformStr.toLowerCase() === "airbnb" &&
+          extractedData.checkInDate &&
+          extractedData.bookingDate
+        ) {
           if (!/\d{4}/.test(extractedData.checkInDate)) {
-            extractedData.checkInDate = adjustArrivalYear(extractedData.checkInDate, extractedData.bookingDate);
+            extractedData.checkInDate = adjustArrivalYear(
+              extractedData.checkInDate,
+              extractedData.bookingDate
+            );
           }
         }
 
@@ -606,18 +866,33 @@ function processEmails() {
         const reservationKey = `${extractedData.reservationNumber}::${platform}`;
 
         if (processedReservations.has(reservationKey)) {
-          Logger.log(`SKIPPED: Duplicate reservation detected in this run: ${reservationKey}.`);
+          Logger.log(
+            `SKIPPED: Duplicate reservation detected in this run: ${reservationKey}.`
+          );
           skippedCount++;
           continue;
         }
         processedReservations.add(reservationKey);
 
-        const airbnbHostFeeRegex = /Host service fee \(3\.0%\)[\s\S]*?-\$([\d,]+\.\d{2})/;
-        const vrboBaseCommissionRegex = /Base commission[\s\S]*?\$([\d,]+\.\d{2})/;
-        const vrboPaymentProcessingFeeRegex = /Payment processing fees\*[\s\S]*?\$?([\d,]+\.\d{2}|TBD)/;
+        const airbnbHostFeeRegex =
+          /Host service fee \(3\.0%\)[\s\S]*?-\$([\d,]+\.\d{2})/;
+        const vrboBaseCommissionRegex =
+          /Base commission[\s\S]*?\$([\d,]+\.\d{2})/;
+        const vrboPaymentProcessingFeeRegex =
+          /Payment processing fees\*[\s\S]*?\$?([\d,]+\.\d{2}|TBD)/;
 
-        extractedData.baseCommissionOrHostFee = platform.toLowerCase() === "airbnb" ? extractFee(emailBody, airbnbHostFeeRegex) : extractFee(emailBody, vrboBaseCommissionRegex);
-        extractedData.paymentProcessingFee = platform.toLowerCase().startsWith("vrbo") ? extractPaymentProcessingFee(emailBody, vrboPaymentProcessingFeeRegex) : 0;
+        extractedData.baseCommissionOrHostFee =
+          platform.toLowerCase() === "airbnb"
+            ? extractFee(emailBody, airbnbHostFeeRegex)
+            : extractFee(emailBody, vrboBaseCommissionRegex);
+        extractedData.paymentProcessingFee = platform
+          .toLowerCase()
+          .startsWith("vrbo")
+          ? extractPaymentProcessingFee(
+              emailBody,
+              vrboPaymentProcessingFeeRegex
+            )
+          : 0;
 
         let bookingDateFinal = extractedData.bookingDate;
         if (platform.toLowerCase() === "vrbo") {
@@ -633,7 +908,11 @@ function processEmails() {
           guestName: toTitleCase(extractedData.guestName),
         };
 
-        const success = upsertBookingToAirtable(dataForAirtable, config, messageId);
+        const success = upsertBookingToAirtable(
+          dataForAirtable,
+          config,
+          messageId
+        );
         if (success) {
           processedInAirtableCount++;
         } else {
@@ -650,7 +929,6 @@ Reservations Processed in Airtable: ${processedInAirtableCount}
 Skipped Emails/Reservations: ${skippedCount}
 ----------------------------------------
 `);
-
   } catch (error) {
     Logger.log(`Error in main execution: ${error.toString()}`);
   }
