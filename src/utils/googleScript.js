@@ -2,6 +2,9 @@
  * @OnlyCurrentDoc
  */
 
+// Declaraciones globales para Google Apps Script
+/* global Logger, PropertiesService, GmailApp, UrlFetchApp */
+
 // =================================================================================
 // SECTION 1: CONFIGURATION & SETUP
 // =================================================================================
@@ -475,11 +478,12 @@ function buildPrompt(emailBody, referenceYear) {
     - paymentProcessingFee: The payment processing fee, often a percentage of the total or a fixed amount. For Vrbo, this might be explicitly listed or sometimes marked as 'TBD' if not yet calculated. If 'TBD', return the string 'TBD'. If not found, return null.
 
     IMPORTANT RULES:
-    1.  If the email is from Vrbo/HomeAway and does NOT contain a detailed pricing structure (e.g., lines for 'nights', 'cleaning fee', 'taxes'), return a JSON object with a single key: {"error": "No detailed pricing structure found in Vrbo email"}. Do not attempt to extract other fields.
-    2.  For dates, if the year is missing, use the provided reference year (${referenceYear}).
-    3.  All monetary values should be numbers, without currency symbols or commas, except for 'paymentProcessingFee' which can be the string 'TBD'.
-    4.  If a field is not found, its value should be null.
-    5.  The 'platform' field must always be an array containing a single string.
+    1.  CRITICAL: This email MUST be from Airbnb or Vrbo/HomeAway platforms ONLY. If the email is not from these platforms (e.g., from Lodgify, other booking platforms, or any other source), return a JSON object with a single key: {"error": "Email is not from Airbnb or Vrbo platform"}. Do not attempt to extract other fields.
+    2.  If the email is from Vrbo/HomeAway and does NOT contain a detailed pricing structure (e.g., lines for 'nights', 'cleaning fee', 'taxes'), return a JSON object with a single key: {"error": "No detailed pricing structure found in Vrbo email"}. Do not attempt to extract other fields.
+    3.  For dates, if the year is missing, use the provided reference year (${referenceYear}).
+    4.  All monetary values should be numbers, without currency symbols or commas, except for 'paymentProcessingFee' which can be the string 'TBD'.
+    5.  If a field is not found, its value should be null.
+    6.  The 'platform' field must always be an array containing a single string.
     Return the extracted fields as a flat JSON object. If any field is missing, set it to null or an empty string.
     `;
 }
@@ -703,7 +707,7 @@ function upsertBookingToAirtable(rawData, config, messageId) {
  * @returns {string} La consulta de búsqueda.
  */
 function buildGmailSearchQuery(searchSinceDateString) {
-  return `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
+  return `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
 }
 
 /**
@@ -794,6 +798,7 @@ function processEmails() {
   }
 
   Logger.log("Starting Gmail-Airtable email processor...");
+  Logger.log(`Configuration: Base ID: ${config.airtableBaseId}, Table: ${config.airtableTableName}`);
 
   try {
     const searchSinceDateString = calculateSearchDate();
@@ -836,6 +841,15 @@ function processEmails() {
           extractedData = enhanceExtractedData(extractedData, message);
         }
 
+        // Verificar si Gemini retornó un error
+        if (extractedData && extractedData.error) {
+          Logger.log(
+            `SKIPPED: ${extractedData.error} (messageId=${messageId}).`
+          );
+          skippedCount++;
+          continue;
+        }
+
         if (!extractedData || !extractedData.reservationNumber) {
           Logger.log(
             `SKIPPED: Could not extract reservation number from messageId=${messageId}.`
@@ -844,9 +858,21 @@ function processEmails() {
           continue;
         }
 
+        // Validación adicional: verificar que la plataforma sea Airbnb o Vrbo
         const platformStr = Array.isArray(extractedData.platform)
           ? extractedData.platform[0]
           : extractedData.platform;
+        
+        if (!platformStr || 
+            (platformStr.toLowerCase() !== "airbnb" && 
+             platformStr.toLowerCase() !== "vrbo" && 
+             platformStr.toLowerCase() !== "homeaway")) {
+          Logger.log(
+            `SKIPPED: Email is not from Airbnb/Vrbo platform. Detected platform: ${platformStr} (messageId=${messageId}).`
+          );
+          skippedCount++;
+          continue;
+        }
         if (
           platformStr &&
           typeof platformStr === "string" &&
