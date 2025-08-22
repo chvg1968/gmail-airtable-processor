@@ -101,9 +101,9 @@ async function processEmailsHandler(req, res) {
     try {
         await (0, gmail_1.getGmailProfile)();
         logger_1.logger.info("Gmail connection successful.");
-        const ninetySixHoursAgo = new Date();
-        ninetySixHoursAgo.setDate(ninetySixHoursAgo.getDate() - 4);
-        const searchSinceDateString = `${ninetySixHoursAgo.getFullYear()}/${String(ninetySixHoursAgo.getMonth() + 1).padStart(2, "0")}/${String(ninetySixHoursAgo.getDate()).padStart(2, "0")}`;
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        const searchSinceDateString = `${twoDaysAgo.getFullYear()}/${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}/${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
         logger_1.logger.info(`Searching emails since ${searchSinceDateString}`);
         const query = `({from:no-reply@airbnb.com subject:("Reservation confirmed" OR "Booking Confirmation")} OR {from:(no-reply@vrbo.com OR no-reply@homeaway.com OR luxeprbahia@gmail.com) (subject:("Instant Booking") "Your booking is confirmed" OR subject:("Reservation from"))}) after:${searchSinceDateString}`;
         const messages = (await (0, gmail_1.searchEmails)(query));
