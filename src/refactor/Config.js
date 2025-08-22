@@ -2,6 +2,7 @@
  * Configuración general
  */
 /* global PropertiesService */
+/* cSpell:ignore Configuración, Carga, configuración, desde, constantes, compartidas, Constantes, alineadas, googlescript, escrituras, reales, Lectura, Claves, servicios, externos, airtable */
 
 // Carga configuración desde Script Properties (GAS) + constantes compartidas
 const CONFIG = (() => {
@@ -17,8 +18,8 @@ const CONFIG = (() => {
   // Constantes alineadas con src/googlescript.js
   const CONSTANTS = {
     DATE_REVIEW: {
-      MAX_DAYS_AHEAD: 180, // ~6 months (more realistic for vacations)
-      FUTURE_YEAR_THRESHOLD: 2027, // Updated for 2025
+      MAX_DAYS_AHEAD: 180, // ~6 meses (más realista para vacaciones)
+      FUTURE_YEAR_THRESHOLD: 2027, // Actualizado para 2025
     },
     EMAIL_SEARCH: {
       DAYS_BACK: 3,
@@ -56,3 +57,5 @@ const CONFIG = (() => {
     CONSTANTS,
   };
 })();
+
+// CONFIG está disponible globalmente para Google Apps Script

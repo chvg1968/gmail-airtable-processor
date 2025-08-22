@@ -9,18 +9,18 @@ function extractReservationNumber(pf, subj, bod) {
     const patterns = [];
     if (/airbnb/i.test(pf)) {
       patterns.push(
-        /(?:Reservation|Confirmation)\s*(?:code|number|#)?[:\s-]*([A-Z0-9]{6,10})/i
+        /(?:Reservation|Confirmation)\s*(?:code|number|#)?[:\s-]*([A-Z0-9]{6,10})/i,
       );
       patterns.push(/Code[:\s-]*([A-Z0-9]{6,10})/i);
     } else if (/vrbo|homeaway/i.test(pf)) {
       // Permit optional leading letter and optional '#'
       patterns.push(
-        /(?:Reservation|Itinerary|Confirmation)\s*#?[:\s-]*([A-Z]?[0-9]{6,})/i
+        /(?:Reservation|Itinerary|Confirmation)\s*#?[:\s-]*([A-Z]?[0-9]{6,})/i,
       );
     } else if (/lodgify/i.test(pf)) {
       // Formats like "#B15695014" or "( #B15695014 )"
       patterns.push(
-        /(?:Reservation|Booking)\s*(?:ID|Number)?\s*#?[:\s-]*([A-Z]?[0-9]{6,})/i
+        /(?:Reservation|Booking)\s*(?:ID|Number)?\s*#?[:\s-]*([A-Z]?[0-9]{6,})/i,
       );
       patterns.push(/reservation\s+#?\s*([A-Z]?[0-9]{6,})/i);
     }
@@ -85,7 +85,7 @@ function processEmails() {
           Logger.log(
             "[Main] Skip por remitente Lodgify help: from=%s subject=%s",
             from,
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -95,21 +95,21 @@ function processEmails() {
         const nonBooking =
           (/help@lodgify\.com/i.test(from) &&
             /There is an update for your request|How would you rate the support/i.test(
-              subject
+              subject,
             )) ||
           (/automated@airbnb\.com/i.test(from) &&
             /Actividad de la cuenta|Account activity|inicio de sesi[oó]n/i.test(
-              subject
+              subject,
             )) ||
           (/propertymanagers\.lodgify\.com/i.test(from) &&
             /Check-?in completed|Check-?out completed|Check-?in reminder/i.test(
-              subject
+              subject,
             ));
         if (nonBooking) {
           Logger.log(
             "[Main] Skip por no-booking (soporte/seguridad). from=%s subject=%s",
             from,
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -135,7 +135,7 @@ function processEmails() {
         if (isSupportOrUpdateEmail) {
           Logger.log(
             "[Main] Skip correo de soporte/actualización: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -156,13 +156,28 @@ function processEmails() {
         ) {
           Logger.log(
             "[Main] Skip correo no relacionado con reservas: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
         }
 
-        // 6. CRÍTICO: Detectar correos reenviados que contienen información de reservas
+        // 6. CRÍTICO: Detectar correos reenviados de Airbnb (evitar duplicados y datos incorrectos)
+        const isForwardedAirbnb =
+          /^fwd:/i.test(subject) &&
+          (/airbnb/i.test(from) ||
+            /reservation confirmed.*arrives/i.test(subject));
+
+        if (isForwardedAirbnb) {
+          Logger.log(
+            "[Main] Skip correo reenviado de Airbnb (evitar duplicados): %s",
+            subject,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        // 7. CRÍTICO: Detectar correos reenviados que contienen información de reservas
         const isForwardedWithReservationInfo =
           /^fwd:/i.test(subject) &&
           /reservation|booking|arrives|nights|arrival/i.test(subject) &&
@@ -171,13 +186,13 @@ function processEmails() {
         if (isForwardedWithReservationInfo) {
           Logger.log(
             "[Main] Skip correo reenviado con info de reserva (posible falso positivo): %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
         }
 
-        // 7. CRÍTICO: Detectar correos con números de reserva pero NO confirmaciones
+        // 8. CRÍTICO: Detectar correos con números de reserva pero NO confirmaciones
         const hasReservationNumberButNotConfirmation =
           /#[A-Z0-9]+/i.test(subject) && // Contiene número de reserva (#B15690205)
           !/confirmed|new confirmed|instant booking/i.test(subject) &&
@@ -186,29 +201,29 @@ function processEmails() {
         if (hasReservationNumberButNotConfirmation) {
           Logger.log(
             "[Main] Skip correo con número de reserva pero no es confirmación original: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
         }
 
-        // 8. Detectar correos de reenvío que no son confirmaciones originales
+        // 9. Detectar correos de reenvío que no son confirmaciones originales
         const isForwardedNonConfirmation =
           /^fwd:/i.test(subject) &&
           !/reservation confirmed|new confirmed booking|instant booking/i.test(
-            subject
+            subject,
           );
 
         if (isForwardedNonConfirmation) {
           Logger.log(
             "[Main] Skip correo reenviado que no es confirmación: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
         }
 
-        // 9. Detectar correos de Lodgify que NO son confirmaciones de reserva
+        // 10. Detectar correos de Lodgify que NO son confirmaciones de reserva
         const isLodgifyNonReservation =
           /lodgify/i.test(from) &&
           !/^New Confirmed Booking/i.test(subject) &&
@@ -218,13 +233,13 @@ function processEmails() {
         if (isLodgifyNonReservation) {
           Logger.log(
             "[Main] Skip correo de Lodgify que no es confirmación de reserva: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
         }
 
-        // 10. Detectar correos que contienen información de reservas pero NO son confirmaciones originales
+        // 11. Detectar correos que contienen información de reservas pero NO son confirmaciones originales
         const isReservationInfoButNotOriginal =
           /reservation|booking|arrives|nights|arrival/i.test(subject) &&
           !/confirmed|new confirmed|instant booking/i.test(subject) &&
@@ -233,7 +248,7 @@ function processEmails() {
         if (isReservationInfoButNotOriginal) {
           Logger.log(
             "[Main] Skip correo con info de reserva pero no es confirmación original: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -252,7 +267,7 @@ function processEmails() {
         if (containsReservationInfoButNotConfirmation) {
           Logger.log(
             "[Main] Skip correo con info de reserva pero no es confirmación: %s",
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -270,14 +285,14 @@ function processEmails() {
         if (isLodgifyConfirmed) {
           Logger.log(
             "[Main] Procesando confirmación real de Lodgify: %s",
-            subject
+            subject,
           );
           dto = Parser.parseEmail(body);
         } else if (/lodgify/i.test(from)) {
           Logger.log(
             "[Main] Skip Lodgify (no es confirmación 'New Confirmed Booking' o es reenviada): from=%s subject=%s",
             from,
-            subject
+            subject,
           );
           skippedCount++;
           continue;
@@ -298,7 +313,7 @@ function processEmails() {
           if (/airbnb/i.test(from) || /airbnb/i.test(subject)) {
             Logger.log(
               "[Main] Intentando enriquecer datos de Airbnb para: %s",
-              subject
+              subject,
             );
             const airbnbData = Parser.parseAirbnbEmail(body);
 
@@ -310,7 +325,7 @@ function processEmails() {
               Logger.log(
                 "[Main] Parser de Airbnb extrajo datos: guestService=%s, hostFee=%s",
                 airbnbData.guestService,
-                airbnbData.baseCommissionOrHostFee
+                airbnbData.baseCommissionOrHostFee,
               );
 
               if (airbnbData.guestService)
@@ -327,7 +342,7 @@ function processEmails() {
 
               Logger.log(
                 "[Main] Datos combinados: parser específico + Gemini para: %s",
-                subject
+                subject,
               );
             }
           }
@@ -337,7 +352,7 @@ function processEmails() {
           dto = NameEnhancementService.enhanceExtractedData(dto, msg);
           Logger.log(
             "[Main] Datos mejorados con NameEnhancementService para: %s",
-            subject
+            subject,
           );
         }
 
@@ -354,15 +369,15 @@ function processEmails() {
         // Debug específico del campo Property
         Logger.log(
           "[Main] Campo Property en DTO: '%s'",
-          dto.Property || "UNDEFINED"
+          dto.Property || "UNDEFINED",
         );
         Logger.log(
           "[Main] Campo property en DTO: '%s'",
-          dto.property || "UNDEFINED"
+          dto.property || "UNDEFINED",
         );
         Logger.log(
           "[Main] Campo accommodationName en DTO: '%s'",
-          dto.accommodationName || "UNDEFINED"
+          dto.accommodationName || "UNDEFINED",
         );
 
         // Detección de duplicados inteligente
@@ -373,7 +388,7 @@ function processEmails() {
             "[Main] Skip DTO sin datos de reserva válidos: guestName='%s', checkIn='%s', checkOut='%s'",
             dto.guestName || "MISSING",
             dto.checkInDate || "MISSING",
-            dto.checkOutDate || "MISSING"
+            dto.checkOutDate || "MISSING",
           );
           skippedCount++;
           continue;
@@ -384,7 +399,7 @@ function processEmails() {
         if (processedReservations.has(duplicateKey)) {
           Logger.log(
             "[Main] Skip duplicado detectado: %s (ya procesado en esta ejecución)",
-            duplicateKey
+            duplicateKey,
           );
           skippedCount++;
           continue;
@@ -396,7 +411,7 @@ function processEmails() {
           if (processedReservations.has(reservationKey)) {
             Logger.log(
               "[Main] Skip duplicado por número de reserva: %s (ya procesado en esta ejecución)",
-              reservationKey
+              reservationKey,
             );
             skippedCount++;
             continue;
@@ -419,17 +434,17 @@ function processEmails() {
         Logger.log(
           "[Main] Mapeo de propiedad - Platform: %s, Input: '%s'",
           platform,
-          propertyInput
+          propertyInput,
         );
 
         const mapped = PropertyService.findPropertyMapping(
           platform,
-          propertyInput
+          propertyInput,
         );
         Logger.log(
           "[Main] Mapeo de propiedad - Resultado: %s (alias: %s)",
           mapped.name,
-          mapped.aliasMatched
+          mapped.aliasMatched,
         );
 
         dto.Property = mapped.name;
@@ -447,7 +462,7 @@ function processEmails() {
               "[Main] Skip Vrbo/Lodgify por preferencia Airbnb (ya procesado en esta ejecución): %s - %s → %s",
               g,
               ci,
-              co
+              co,
             );
             skippedCount++;
             continue;
@@ -459,7 +474,7 @@ function processEmails() {
               "[Main] Skip Vrbo/Lodgify por preferencia Airbnb (existe en Airtable): %s - %s → %s",
               g,
               ci,
-              co
+              co,
             );
             skippedCount++;
             continue;
@@ -470,7 +485,7 @@ function processEmails() {
             Logger.log(
               "[Main] Skip Vrbo/Lodgify por falta de check-in/check-out. from=%s subject=%s",
               from,
-              subject
+              subject,
             );
             skippedCount++;
             continue;
@@ -483,7 +498,7 @@ function processEmails() {
           airbnbReservations.add(airbnbKey);
           Logger.log(
             "[Main] Registrada reserva Airbnb para evitar duplicados: %s",
-            airbnbKey
+            airbnbKey,
           );
         }
 
@@ -493,14 +508,14 @@ function processEmails() {
           const guessed = extractReservationNumber(
             String(platform || ""),
             subject,
-            body
+            body,
           );
           if (guessed) {
             dto.reservationNumber = guessed;
             Logger.log(
               "[Main] Reservation number inferido: %s (platform=%s)",
               guessed,
-              String(platform)
+              String(platform),
             );
           }
         }
@@ -518,7 +533,7 @@ function processEmails() {
             "[Main] Skip por reservationNumber vacío/0. from=%s subject=%s platform=%s",
             from,
             subject,
-            String(platform)
+            String(platform),
           );
           skippedCount++;
           continue;
