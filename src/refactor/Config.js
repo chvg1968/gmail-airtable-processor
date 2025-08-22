@@ -17,11 +17,11 @@ const CONFIG = (() => {
   // Constantes alineadas con src/googlescript.js
   const CONSTANTS = {
     DATE_REVIEW: {
-      MAX_DAYS_AHEAD: 72,
-      FUTURE_YEAR_THRESHOLD: 2026,
+      MAX_DAYS_AHEAD: 180, // ~6 months (more realistic for vacations)
+      FUTURE_YEAR_THRESHOLD: 2027, // Updated for 2025
     },
     EMAIL_SEARCH: {
-      DAYS_BACK: 7,
+      DAYS_BACK: 3,
     },
     AIRTABLE: {
       DEFAULT_CHECKIN_TIME: "15:00:00",
