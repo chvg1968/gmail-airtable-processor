@@ -36,7 +36,7 @@ const CONFIG = (() => {
   };
 
   // SAFE_MODE: evita escrituras reales a Airtable
-  const SAFE_MODE = true;
+  const SAFE_MODE = false;
 
   // Lectura de variables desde Script Properties
   const airtableApiKey = getScriptProperty("AIRTABLE_API_KEY") || "";
