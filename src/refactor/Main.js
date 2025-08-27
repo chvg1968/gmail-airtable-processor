@@ -287,7 +287,8 @@ function processEmails() {
             "[Main] Procesando confirmación real de Lodgify: %s",
             subject,
           );
-          dto = Parser.parseEmail(body);
+          Logger.log("[Main] Pasando subject al parser: '%s'", subject);
+          dto = Parser.parseEmail(body, subject);
         } else if (/lodgify/i.test(from)) {
           Logger.log(
             "[Main] Skip Lodgify (no es confirmación 'New Confirmed Booking' o es reenviada): from=%s subject=%s",
