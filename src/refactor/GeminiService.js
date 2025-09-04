@@ -1,6 +1,27 @@
 /* global UrlFetchApp, CONFIG, Utils */
 
 var GeminiService = {
+  /**
+   * Compara el primer nombre y las fechas entre dos DTOs (uno de Lodgify y otro de Airbnb).
+   * Si coinciden, retorna true para indicar que se debe descartar la reserva de Lodgify.
+   * @param {Object} lodgifyDto - DTO de Lodgify
+   * @param {Object} airbnbDto - DTO de Airbnb
+   * @returns {boolean}
+   */
+  shouldDiscardLodgifyByFirstNameAndDates: function (lodgifyDto, airbnbDto) {
+    if (!lodgifyDto || !airbnbDto) return false;
+    // Extraer primer nombre (ignorando mayúsculas/minúsculas y espacios)
+    const getFirstName = name => {
+      if (!name) return '';
+      return name.trim().split(' ')[0].toLowerCase();
+    };
+    const lodgifyFirst = getFirstName(lodgifyDto.guestName);
+    const airbnbFirst = getFirstName(airbnbDto.guestName);
+    // Comparar fechas
+    const sameCheckIn = String(lodgifyDto.checkInDate).slice(0,10) === String(airbnbDto.checkInDate).slice(0,10);
+    const sameCheckOut = String(lodgifyDto.checkOutDate).slice(0,10) === String(airbnbDto.checkOutDate).slice(0,10);
+    return lodgifyFirst && airbnbFirst && (lodgifyFirst === airbnbFirst) && sameCheckIn && sameCheckOut;
+  },
   buildPrompt: function (emailBody, year) {
     return `
       Analyze the following email content to extract booking details. The current year is ${year} for context, which should be used for any dates where the year is not specified.
@@ -37,7 +58,7 @@ var GeminiService = {
       - taxesAmount: Any taxes applied. For Airbnb, map from 'Occupancy taxes' if present. For Vrbo, map from the taxes lines present in the details. For Lodgify emails, map 'TAX' to this field (numeric, no currency symbol or commas).
       - damageProtectionFee: The fee for damage protection, insurance, or damage deposit.
       - clubFee: The 'Club' fee, if present in the Vrbo pricing breakdown. For Lodgify emails, map 'Resort Fee' to this field. Null if not present.
-      - baseCommissionOrHostFee: The base commission for Vrbo or host fee for Airbnb. For Airbnb, this is the 'Host service fee (3.0%)' which is a deduction from the host's payout. For Vrbo, this might be part of a 'Payout' calculation. If not found, return null.
+      - baseCommissionOrHostFee: The base commission for Vrbo or host fee for Airbnb. For Airbnb, this is the 'Host service fee (3.0%)' which is a deduction from the host's payout.This value is typically negative (e.g., -$15.00), take the absolute value of this number (e.g., 15.00). For Vrbo, this might be part of a 'Payout' calculation. If not found, return null.
       - paymentProcessingFee: The payment processing fee, often a percentage of the total or a fixed amount. For Vrbo, this might be explicitly listed or sometimes marked as 'TBD' if not yet calculated. If 'TBD', return the string 'TBD'. If not found, return null.
 
       IMPORTANT RULES:

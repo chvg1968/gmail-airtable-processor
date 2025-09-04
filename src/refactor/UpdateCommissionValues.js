@@ -266,7 +266,7 @@ const UpdateCommissionValues = (() => {
       const taxes = Utils.sanitizeMoneyUSD(fields.Taxes || 0);
 
       newValue1 = Utils.sanitizeMoneyUSD(
-        (accommodation + resortFee + cleaningFee + taxes) * 0.03
+        (accommodation + resortFee + cleaningFee + taxes) * 0.050262
       );
       newValue2 = Utils.sanitizeMoneyUSD(
         (accommodation + resortFee + taxes) * 0.05

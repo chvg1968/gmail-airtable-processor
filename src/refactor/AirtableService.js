@@ -110,14 +110,16 @@ const AirtableService = (() => {
         .replace(/[^a-z0-9\s]/g, "")
         .replace(/\s+/g, " ")
         .trim();
-    const target = normalize(guestName);
+    const getFirstName = (name) => normalize(name).split(" ")[0] || "";
+    const targetFirst = getFirstName(guestName);
     for (const rec of data.records) {
       const fn =
         rec.fields &&
         (rec.fields["Full Name"] ||
           rec.fields["Full name"] ||
           rec.fields["Guest name"]);
-      if (fn && normalize(fn) === target) return true;
+      const recFirst = fn ? getFirstName(fn) : "";
+      if (recFirst && recFirst === targetFirst) return true;
     }
     return false;
   }
@@ -164,7 +166,7 @@ const AirtableService = (() => {
       dto.baseCommissionOrHostFee ?? 0
     );
     const vrboValue1 = sanitizeMoneyUSD(
-      (accommodationBase + clubFee + cleaningFee + taxes) * 0.03
+      (accommodationBase + clubFee + cleaningFee + taxes) * 0.050262
     );
     const vrboValue2 = sanitizeMoneyUSD(
       (accommodationBase + clubFee + cleaningFee) * 0.05

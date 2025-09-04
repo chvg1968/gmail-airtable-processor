@@ -117,7 +117,7 @@ function processEmails() {
 
         // 3. Evitar reprocesar si ya existe por Gmail Message ID
         if (AirtableService.isMessageProcessed(CONFIG, messageId)) {
-          Logger.log("[Main] Skip (ya procesado): %s - %s", messageId, subject);
+          Logger.log("[Main] Skip: La reserva con Gmail Message ID %s ya está registrada. No se procesa nuevamente. Subject: %s", messageId, subject);
           skippedCount++;
           continue;
         }
@@ -282,7 +282,39 @@ function processEmails() {
           /^New Confirmed Booking/i.test(subject) &&
           !/^fwd:|^re:/i.test(subject); // Solo confirmaciones originales, no reenviadas
 
+        // FILTRO: extraer primer nombre y fecha de arrival del subject de Lodgify
         if (isLodgifyConfirmed) {
+          // Ejemplo subject: New Confirmed Booking: Jalynne (3 Nights, Arrival: Sep 04 2025) - #B15970144
+          const lodgifySubjectMatch = subject.match(/New Confirmed Booking:\s*(\w+)\s*\(.*Arrival:\s*([A-Za-z]{3} \d{2} \d{4})/i);
+          let lodgifyFirst = '', lodgifyArrival = '';
+          if (lodgifySubjectMatch) {
+            lodgifyFirst = lodgifySubjectMatch[1].toLowerCase();
+            lodgifyArrival = lodgifySubjectMatch[2]; // Ej: Sep 04 2025
+          }
+          // Normalizar fecha a YYYY-MM-DD
+          let lodgifyArrivalISO = '';
+          if (lodgifyArrival) {
+            const d = new Date(lodgifyArrival);
+            if (!isNaN(d.getTime())) {
+              lodgifyArrivalISO = d.toISOString().slice(0,10);
+            }
+          }
+          // Buscar coincidencia en reservas de Airbnb
+          let airbnbMatch = false;
+          for (const abKey of airbnbReservations) {
+            const [abName, abCi] = abKey.split('::');
+            const airbnbFirst = abName ? abName.trim().split(' ')[0].toLowerCase() : '';
+            const airbnbArrivalISO = abCi ? String(abCi).slice(0,10) : '';
+            if (lodgifyFirst && airbnbFirst && lodgifyFirst === airbnbFirst && lodgifyArrivalISO && airbnbArrivalISO && lodgifyArrivalISO === airbnbArrivalISO) {
+              airbnbMatch = true;
+              break;
+            }
+          }
+          if (airbnbMatch) {
+            Logger.log("[Main] Skip Lodgify por coincidencia de primer nombre y fecha de arrival en subject: %s - %s", lodgifyFirst, lodgifyArrivalISO);
+            skippedCount++;
+            continue;
+          }
           Logger.log(
             "[Main] Procesando confirmación real de Lodgify: %s",
             subject,
@@ -458,9 +490,24 @@ function processEmails() {
 
           // Verificar si ya procesamos una reserva de Airbnb para este huésped+fechas en esta ejecución
           const airbnbKey = `${g}::${ci}::${co}::Airbnb`;
-          if (airbnbReservations.has(airbnbKey)) {
+          let airbnbDtoMatch = null;
+          // Buscar DTO de Airbnb en la ejecución actual con mismo primer nombre y fechas
+          for (const abKey of airbnbReservations) {
+            const [abName, abCi, abCo] = abKey.split('::');
+            // Solo comparar el primer nombre de ambos
+            const getFirstName = name => (name ? name.trim().split(' ')[0].toLowerCase() : '');
+            const lodgifyFirst = getFirstName(dto.guestName);
+            const airbnbFirst = getFirstName(abName);
+            const sameCheckIn = String(dto.checkInDate).slice(0,10) === String(abCi).slice(0,10);
+            const sameCheckOut = String(dto.checkOutDate).slice(0,10) === String(abCo).slice(0,10);
+            if (lodgifyFirst && airbnbFirst && lodgifyFirst === airbnbFirst && sameCheckIn && sameCheckOut) {
+              airbnbDtoMatch = abKey;
+              break;
+            }
+          }
+          if (airbnbDtoMatch) {
             Logger.log(
-              "[Main] Skip Vrbo/Lodgify por preferencia Airbnb (ya procesado en esta ejecución): %s - %s → %s",
+              "[Main] Skip Lodgify por preferencia Airbnb (primer nombre y fechas coinciden): %s - %s → %s",
               g,
               ci,
               co,
@@ -540,6 +587,7 @@ function processEmails() {
           continue;
         }
 
+        // Solo procesar si no fue registrado antes (ya validado arriba)
         const res = AirtableService.upsert(dto, CONFIG, messageId);
         Logger.log("[Main] Upsert resultado: %s", JSON.stringify(res));
         if (res && res.ok) {
