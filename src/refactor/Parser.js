@@ -1,14 +1,35 @@
+/* eslint-disable */
+/* global Logger */
+const __IS_NODE__ = typeof require !== "undefined" && typeof module !== "undefined";
+let __PS__ = null;
+let __UTILS__ = null;
+if (__IS_NODE__) {
+  try { __PS__ = require("./PropertyService"); } catch (_) {}
+  try { __UTILS__ = require("./Utils"); } catch (_) {}
+}
+function getPropertyService() {
+  return __PS__ || (typeof globalThis !== "undefined" ? globalThis.PropertyService : null) || {};
+}
+function getUtils() {
+  return __UTILS__ || (typeof globalThis !== "undefined" ? globalThis.Utils : null) || {};
+}
+// Helper local para logs seguros en GAS/Node sin romper formato
+function safeLog(msg) {
+  try {
+    if (typeof Logger !== "undefined" && Logger && typeof Logger.log === "function") {
+      Logger.log(String(msg));
+    }
+  } catch (_) {}
+}
 /**
  * Parser simplificado para correos de Lodgify → Airtable
  */
 const Parser = {
   parseEmail: function (rawEmail, subject) {
-    // Debug: Log del email crudo para análisis
-    Logger.log("[Parser] Subject: %s", subject || "NO_SUBJECT");
-    Logger.log(
-      "[Parser] Email crudo (primeros 500 chars): %s",
-      rawEmail.substring(0, 500)
-    );
+  // Debug: Log del email crudo para análisis
+  safeLog("[Parser] Subject: " + (subject || "NO_SUBJECT"));
+  safeLog("[Parser] Email crudo (primeros 500 chars):");
+  safeLog(rawEmail.substring(0, 500));
 
     // Limpiar HTML entities y tags más agresivamente
     const cleanEmail = rawEmail
@@ -19,8 +40,8 @@ const Parser = {
       .replace(/&gt;/g, ">")
       .replace(/&nbsp;/g, " ")
       .replace(/&quot;/g, '"')
-      // Convertir breaks y párrafos a saltos de línea ANTES de remover tags
-      .replace(/<br\s*\/?>/gi, "\n")
+  // Convertir breaks y párrafos a saltos de línea ANTES de remover tags
+  .replace(/<br\s*\/?>(?:\s*)/gi, "\n")
       .replace(/<\/p>/g, "\n")
       .replace(/<p>/g, "\n")
       // Remover todos los demás tags HTML
@@ -32,11 +53,9 @@ const Parser = {
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
-    // Debug: Log del email limpio
-    Logger.log(
-      "[Parser] Email limpio (primeros 500 chars): %s",
-      cleanEmail.substring(0, 500)
-    );
+  // Debug: Log del email limpio
+  safeLog("[Parser] Email limpio (primeros 500 chars):");
+  safeLog(cleanEmail.substring(0, 500));
 
     const patterns = {
       // Patrones actualizados para el formato real de Lodgify
@@ -117,41 +136,39 @@ const Parser = {
           "Phone_Number",
         ].includes(field)
       ) {
-        Logger.log(
-          "[Parser] Campo %s: pattern=%s, match=%s, result='%s'",
-          field,
-          matchedPattern || "MULTIPLE_PATTERNS",
-          match ? "FOUND" : "NOT_FOUND",
-          result[field]
-        );
+        var _msg =
+          "[Parser] Campo " +
+          field +
+          ": pattern=" +
+          (matchedPattern || "MULTIPLE_PATTERNS") +
+          ", match=" +
+          (match ? "FOUND" : "NOT_FOUND") +
+          ", result='" +
+          result[field] +
+          "'";
+        safeLog(_msg);
       }
     }
 
     // Fallback: extraer datos del subject si no se encontraron en el body
     if (subject && (!result.Full_Name || !result.Arrival)) {
       // Patrón para subject: "New Confirmed Booking: Steven (4 Nights, Arrival: Oct 16 2025) - #B15831191"
-      const subjectMatch = subject.match(
-        /New Confirmed Booking:\s*([^(]+)\s*\([^,]+,\s*Arrival:\s*([^)]+)\)/i
-      );
+      const subjectMatch = subject.match(/New Confirmed Booking:\s*([^(]+)\s*\([^,]+,\s*Arrival:\s*([^)]+)\)/i);
       if (subjectMatch) {
         if (!result.Full_Name && subjectMatch[1]) {
           result.Full_Name = subjectMatch[1].trim();
-          Logger.log(
-            "[Parser] Nombre extraído del subject: '%s'",
-            result.Full_Name
-          );
+          safeLog("[Parser] Nombre extraído del subject: '" + result.Full_Name + "'");
         }
         if (!result.Arrival && subjectMatch[2]) {
           result.Arrival = subjectMatch[2].trim();
-          Logger.log(
-            "[Parser] Fecha de llegada extraída del subject: '%s'",
-            result.Arrival
-          );
+          safeLog("[Parser] Fecha de llegada extraída del subject: '" + result.Arrival + "'");
         }
       }
     }
 
-    const propertyNorm = PropertyService.normalizePropertyName(result.Property);
+    const propertyNorm = getPropertyService().normalizePropertyName
+      ? getPropertyService().normalizePropertyName(result.Property)
+      : (result.Property || "");
     const checkIn = normalizeDate(result.Arrival);
     const checkOut = normalizeDate(result.Departure_Date);
 
@@ -164,14 +181,16 @@ const Parser = {
       checkInDate: checkIn,
       checkOutDate: checkOut,
       Property: propertyNorm,
-      accommodationPrice: Utils.sanitizeMoneyUSD(result.Accommodation || 0),
+      accommodationPrice: getUtils().sanitizeMoneyUSD
+        ? getUtils().sanitizeMoneyUSD(result.Accommodation || 0)
+        : (parseFloat(String(result.Accommodation||0).toString().replace(/[^0-9.]/g, "")) || 0),
       adults: parseInt(result.Total_Guests || 0) || 0,
       children: 0,
       bookingDate: new Date().toISOString().slice(0, 10),
-      cleaningFee: Utils.sanitizeMoneyUSD(result.Cleaning_Fee || 0),
-      guestService: Utils.sanitizeMoneyUSD(result.Guest_Service || 0),
-      taxesAmount: Utils.sanitizeMoneyUSD(result.Taxes || 0),
-      clubFee: Utils.sanitizeMoneyUSD(result.Resort_Fee || 0),
+  cleaningFee: getUtils().sanitizeMoneyUSD ? getUtils().sanitizeMoneyUSD(result.Cleaning_Fee || 0) : 0,
+  guestService: getUtils().sanitizeMoneyUSD ? getUtils().sanitizeMoneyUSD(result.Guest_Service || 0) : 0,
+  taxesAmount: getUtils().sanitizeMoneyUSD ? getUtils().sanitizeMoneyUSD(result.Taxes || 0) : 0,
+  clubFee: getUtils().sanitizeMoneyUSD ? getUtils().sanitizeMoneyUSD(result.Resort_Fee || 0) : 0,
       discount: 0,
       gmailMessageId:
         "lodgify-" + (result.Reservation_number || new Date().getTime()),
@@ -183,7 +202,7 @@ const Parser = {
     let result = {};
 
     // Patrones regex más simples y directos para Airbnb
-    const patterns = {
+  const patterns = {
       guestService: /Guest service fee\s+\$([0-9.,]+)/i,
       cleaningFee: /Cleaning fee\s+\$([0-9.,]+)/i,
       taxesAmount: /Occupancy taxes\s+\$([0-9.,]+)/i,
@@ -197,39 +216,55 @@ const Parser = {
     // Extraer Guest service fee
     const guestServiceMatch = rawEmail.match(patterns.guestService);
     if (guestServiceMatch) {
-      result.guestService = Utils.sanitizeMoneyUSD(guestServiceMatch[1]);
+      result.guestService = getUtils().sanitizeMoneyUSD
+        ? getUtils().sanitizeMoneyUSD(guestServiceMatch[1])
+        : parseFloat(String(guestServiceMatch[1]).replace(/[^0-9.]/g, "")) || 0;
     }
 
     // Extraer Cleaning fee (solo de la sección Guest paid, no Host payout)
     const guestPaidSection = rawEmail.split("Host payout")[0];
     const cleaningFeeMatch = guestPaidSection.match(patterns.cleaningFee);
     if (cleaningFeeMatch) {
-      result.cleaningFee = Utils.sanitizeMoneyUSD(cleaningFeeMatch[1]);
+      result.cleaningFee = getUtils().sanitizeMoneyUSD
+        ? getUtils().sanitizeMoneyUSD(cleaningFeeMatch[1])
+        : parseFloat(String(cleaningFeeMatch[1]).replace(/[^0-9.]/g, "")) || 0;
     }
 
     // Extraer Occupancy taxes
     const taxesMatch = rawEmail.match(patterns.taxesAmount);
     if (taxesMatch) {
-      result.taxesAmount = Utils.sanitizeMoneyUSD(taxesMatch[1]);
+      result.taxesAmount = getUtils().sanitizeMoneyUSD
+        ? getUtils().sanitizeMoneyUSD(taxesMatch[1])
+        : parseFloat(String(taxesMatch[1]).replace(/[^0-9.]/g, "")) || 0;
     }
 
     // Extraer Host service fee
     const hostServiceMatch = rawEmail.match(patterns.hostServiceFee);
     if (hostServiceMatch) {
-      result.baseCommissionOrHostFee = Utils.sanitizeMoneyUSD(
-        hostServiceMatch[1]
-      );
+  result.baseCommissionOrHostFee = getUtils().sanitizeMoneyUSD
+    ? getUtils().sanitizeMoneyUSD(hostServiceMatch[1])
+    : parseFloat(String(hostServiceMatch[1]).replace(/[^0-9.]/g, "")) || 0;
     }
 
     // Extraer accommodation price (rate per night, no el total)
     const accommodationMatch = rawEmail.match(patterns.accommodationRate);
     if (accommodationMatch) {
-      result.accommodationPrice = Utils.sanitizeMoneyUSD(accommodationMatch[1]);
+      result.accommodationPrice = getUtils().sanitizeMoneyUSD
+        ? getUtils().sanitizeMoneyUSD(accommodationMatch[1])
+        : parseFloat(String(accommodationMatch[1]).replace(/[^0-9.]/g, "")) || 0;
     }
 
     return result;
   },
 };
+
+// Export/Expose for Node and GAS environments
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = Parser;
+}
+if (typeof globalThis !== "undefined" && !globalThis.Parser) {
+  globalThis.Parser = Parser;
+}
 
 /**
  * Normalizador de fechas → "YYYY-MM-DD"

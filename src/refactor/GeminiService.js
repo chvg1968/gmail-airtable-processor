@@ -1,4 +1,4 @@
-/* global UrlFetchApp, CONFIG, Utils */
+/* global UrlFetchApp, CONFIG, Utils, Logger */
 
 var GeminiService = {
   /**
@@ -11,16 +11,26 @@ var GeminiService = {
   shouldDiscardLodgifyByFirstNameAndDates: function (lodgifyDto, airbnbDto) {
     if (!lodgifyDto || !airbnbDto) return false;
     // Extraer primer nombre (ignorando mayúsculas/minúsculas y espacios)
-    const getFirstName = name => {
-      if (!name) return '';
-      return name.trim().split(' ')[0].toLowerCase();
+    const getFirstName = (name) => {
+      if (!name) return "";
+      return name.trim().split(" ")[0].toLowerCase();
     };
     const lodgifyFirst = getFirstName(lodgifyDto.guestName);
     const airbnbFirst = getFirstName(airbnbDto.guestName);
     // Comparar fechas
-    const sameCheckIn = String(lodgifyDto.checkInDate).slice(0,10) === String(airbnbDto.checkInDate).slice(0,10);
-    const sameCheckOut = String(lodgifyDto.checkOutDate).slice(0,10) === String(airbnbDto.checkOutDate).slice(0,10);
-    return lodgifyFirst && airbnbFirst && (lodgifyFirst === airbnbFirst) && sameCheckIn && sameCheckOut;
+    const sameCheckIn =
+      String(lodgifyDto.checkInDate).slice(0, 10) ===
+      String(airbnbDto.checkInDate).slice(0, 10);
+    const sameCheckOut =
+      String(lodgifyDto.checkOutDate).slice(0, 10) ===
+      String(airbnbDto.checkOutDate).slice(0, 10);
+    return (
+      lodgifyFirst &&
+      airbnbFirst &&
+      lodgifyFirst === airbnbFirst &&
+      sameCheckIn &&
+      sameCheckOut
+    );
   },
   buildPrompt: function (emailBody, year) {
     return `
@@ -85,33 +95,50 @@ var GeminiService = {
         maxOutputTokens: CONFIG.CONSTANTS.GEMINI.MAX_OUTPUT_TOKENS,
         topP: CONFIG.CONSTANTS.GEMINI.TOP_P,
         topK: CONFIG.CONSTANTS.GEMINI.TOP_K,
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
       },
     };
 
     try {
-      const res = UrlFetchApp.fetch(url, { method: "post", contentType: "application/json", payload: JSON.stringify(payload) });
+      const res = UrlFetchApp.fetch(url, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify(payload),
+      });
       const data = JSON.parse(res.getContentText());
-      const text = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+      const text =
+        data &&
+        data.candidates &&
+        data.candidates[0] &&
+        data.candidates[0].content &&
+        data.candidates[0].content.parts &&
+        data.candidates[0].content.parts[0] &&
+        data.candidates[0].content.parts[0].text;
       if (!text) return null;
 
       let parsed = null;
-      try { parsed = JSON.parse(text); } catch (_) { return null; }
-      if (!parsed || typeof parsed !== 'object') return null;
+      try {
+        parsed = JSON.parse(text);
+      } catch (_) {
+        return null;
+      }
+      if (!parsed || typeof parsed !== "object") return null;
 
       // Normalización mínima del DTO
-      const platform = String(parsed.platform || '').trim();
+      const platform = String(parsed.platform || "").trim();
       return {
-        platform: /airbnb/i.test(platform) ? 'Airbnb' : 'Vrbo',
-        reservationNumber: parsed.reservationNumber || '',
-        guestName: parsed.guestName || '',
-        guestEmail: parsed.guestEmail || '',
-        guestPhone: parsed.guestPhone || '',
-        checkInDate: parsed.checkInDate || '',
-        checkOutDate: parsed.checkOutDate || '',
-        bookingDate: parsed.bookingDate || '',
-        Property: parsed.accommodationName || parsed.property || '',
-        accommodationPrice: Utils.sanitizeMoneyUSD(parsed.accommodationPrice || 0),
+        platform: /airbnb/i.test(platform) ? "Airbnb" : "Vrbo",
+        reservationNumber: parsed.reservationNumber || "",
+        guestName: parsed.guestName || "",
+        guestEmail: parsed.guestEmail || "",
+        guestPhone: parsed.guestPhone || "",
+        checkInDate: parsed.checkInDate || "",
+        checkOutDate: parsed.checkOutDate || "",
+        bookingDate: parsed.bookingDate || "",
+        Property: parsed.accommodationName || parsed.property || "",
+        accommodationPrice: Utils.sanitizeMoneyUSD(
+          parsed.accommodationPrice || 0,
+        ),
         cleaningFee: Utils.sanitizeMoneyUSD(parsed.cleaningFee || 0),
         guestService: Utils.sanitizeMoneyUSD(parsed.guestService || 0),
         taxesAmount: Utils.sanitizeMoneyUSD(parsed.taxesAmount || 0),
@@ -119,13 +146,53 @@ var GeminiService = {
         discount: Utils.sanitizeMoneyUSD(parsed.discount || 0),
         adults: Number(parsed.adults || 0),
         children: Number(parsed.children || 0),
-        baseCommissionOrHostFee: Utils.sanitizeMoneyUSD(parsed.baseCommissionOrHostFee || 0),
-        paymentProcessingFee: parsed.paymentProcessingFee === 'TBD' ? 'TBD' : Utils.sanitizeMoneyUSD(parsed.paymentProcessingFee || 0),
+        baseCommissionOrHostFee: Utils.sanitizeMoneyUSD(
+          parsed.baseCommissionOrHostFee || 0,
+        ),
+        paymentProcessingFee:
+          parsed.paymentProcessingFee === "TBD"
+            ? "TBD"
+            : Utils.sanitizeMoneyUSD(parsed.paymentProcessingFee || 0),
       };
     } catch (e) {
       // Log ligero en consola de GAS
-      Logger.log(`[GeminiService] Error: ${e}`);
+      try {
+        if (typeof Logger !== "undefined" && Logger && Logger.log) {
+          Logger.log(`[GeminiService] Error: ${e}`);
+        } else if (typeof console !== "undefined" && console && console.log) {
+          console.log(`[GeminiService] Error: ${e}`);
+        }
+      } catch (_) {
+        /* ignore secondary logging errors */
+      }
       return null;
     }
-  }
+  },
 };
+// Compat: método que espera MainRefactored en algunos flujos de Airbnb
+// En entorno de pruebas (Node), devolverá null si no está disponible UrlFetchApp
+if (typeof GeminiService.extractAirbnbData !== "function") {
+  GeminiService.extractAirbnbData = function (emailBody, _subject) {
+    try {
+      if (
+        typeof UrlFetchApp === "undefined" ||
+        !CONFIG ||
+        !CONFIG.geminiApiKey
+      ) {
+        return null;
+      }
+      const year = new Date().getFullYear();
+      return GeminiService.extract(emailBody, CONFIG.geminiApiKey, year);
+    } catch (_) {
+      return null;
+    }
+  };
+}
+
+// Export/Expose for Node and GAS environments
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = GeminiService;
+}
+if (typeof globalThis !== "undefined" && !globalThis.GeminiService) {
+  globalThis.GeminiService = GeminiService;
+}

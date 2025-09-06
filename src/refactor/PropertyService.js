@@ -1,3 +1,4 @@
+/* global Logger */
 /**
  * Servicio local para normalizar nombres de propiedades
  * (evitamos dependencia de Google Sheets)
@@ -84,14 +85,42 @@ const PropertyService = (() => {
     
     // Normalizar la plataforma para el lookup
     const normalizedPlatform = String(platform || "").trim();
-    const strat = PlatformStrategies[normalizedPlatform] || PlatformStrategies.default;
-    
-    // Debug logging
-    console.log(`[PropertyService] Buscando propiedad - Platform: '${normalizedPlatform}', Input: '${input}'`);
-    console.log(`[PropertyService] Estrategia seleccionada: ${strat.name || 'default'}`);
+    const strat =
+      PlatformStrategies[normalizedPlatform] || PlatformStrategies.default;
+
+    // Debug logging (seguro en GAS/Node)
+    try {
+      if (typeof Logger !== "undefined" && Logger && Logger.log) {
+        Logger.log(
+          `[PropertyService] Buscando propiedad - Platform: '${normalizedPlatform}', Input: '${input}'`,
+        );
+        Logger.log(
+          `[PropertyService] Estrategia seleccionada: ${strat.name || "default"}`,
+        );
+      } else if (typeof console !== "undefined" && console && console.log) {
+        console.log(
+          `[PropertyService] Buscando propiedad - Platform: '${normalizedPlatform}', Input: '${input}'`,
+        );
+        console.log(
+          `[PropertyService] Estrategia seleccionada: ${strat.name || "default"}`,
+        );
+      }
+    } catch (_) {
+      /* ignore logging issues */
+    }
     
     const match = strat(input);
-    console.log(`[PropertyService] Match encontrado:`, match);
+    try {
+      if (typeof Logger !== "undefined" && Logger && Logger.log) {
+        Logger.log(
+          `[PropertyService] Match encontrado: ${JSON.stringify(match)}`,
+        );
+      } else if (typeof console !== "undefined" && console && console.log) {
+        console.log(`[PropertyService] Match encontrado:`, match);
+      }
+    } catch (_) {
+      /* ignore logging issues */
+    }
     
     return match || { name: "Temporal", aliasMatched: null };
   }
@@ -100,5 +129,31 @@ const PropertyService = (() => {
     return findPropertyMapping(platform, input).name;
   }
 
-  return { normalizePropertyName, findPropertyMapping };
+  /**
+   * Enriquecer DTO con nombre de propiedad normalizado según plataforma
+   * - Mantiene dto inmutable en estructura (modifica solo Property si hay match)
+   * - Acepta platform como string o array (toma el primero)
+   */
+  function enrichPropertyIfNeeded(dto) {
+    if (!dto || typeof dto !== "object") return dto;
+    const platform = Array.isArray(dto.platform)
+      ? dto.platform[0]
+      : dto.platform;
+    const inputProp = dto.Property || dto.property || "";
+    const mapping = findPropertyMapping(platform, inputProp);
+    if (mapping && mapping.name) {
+      dto.Property = mapping.name;
+    }
+    return dto;
+  }
+
+  return { normalizePropertyName, findPropertyMapping, enrichPropertyIfNeeded };
 })();
+
+// Export/Expose for Node and GAS environments
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = PropertyService;
+}
+if (typeof globalThis !== "undefined" && !globalThis.PropertyService) {
+  globalThis.PropertyService = PropertyService;
+}

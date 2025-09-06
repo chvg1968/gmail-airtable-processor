@@ -31,10 +31,18 @@ const Utils = (() => {
         ? `${yyyy}-${mm}-${dd}T${hourString}`
         : `${yyyy}-${mm}-${dd}`;
     } catch (e) {
-      Logger.log(
-        `[Utils] formatDateForAirtable error for '${dateString}': ${e}`
-      );
-      return null;
+      // Log protegido para entornos sin Logger (Node tests)
+      try {
+        var _msg =
+          "[Utils] formatDateForAirtable error for '" +
+          String(dateString) +
+          "': " +
+          String(e);
+        Logger.log(_msg);
+      } catch (_err) {
+        /* no-op */
+      }
+      return "";
     }
   }
 
@@ -95,3 +103,12 @@ const Utils = (() => {
     stripForwardHeaders,
   };
 })();
+
+// Export/Expose for Node and GAS environments
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = Utils;
+}
+// Ensure global availability in GAS (and Node if desired)
+if (typeof globalThis !== "undefined" && !globalThis.Utils) {
+  globalThis.Utils = Utils;
+}
