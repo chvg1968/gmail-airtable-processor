@@ -116,13 +116,13 @@ function hasValidReservationData(dto) {
   return SharedUtils.hasValidReservationData(dto);
 }
 
-// function extractReservationNumber(platform, subject, body) {
-//   ensureDependencies();
+function extractReservationNumber(platform, subject, body) {
+  ensureDependencies();
   
-//   // Usar SimpleEmailProcessor para extraer número de reserva
-//   const quickInfo = SimpleEmailProcessor.getQuickReservationInfo(subject);
-//   return quickInfo ? quickInfo.reservationNumber : null;
-// }
+  // Usar SimpleEmailProcessor para extraer número de reserva
+  const quickInfo = SimpleEmailProcessor.getQuickReservationInfo(subject);
+  return quickInfo ? quickInfo.reservationNumber : null;
+}
 
 /**
  * Función de health check SIMPLIFICADA
@@ -180,23 +180,11 @@ if (typeof module !== 'undefined' && module.exports) {
     processEmailsWithFallback,
   };
 } else {
-  // Entorno GAS: exponer funciones globalmente (con protección contra duplicados)
-  if (typeof globalThis.processEmails === 'undefined') {
-    globalThis.processEmails = processEmails;
-  }
-  if (typeof globalThis.processAirbnbEmail === 'undefined') {
-    globalThis.processAirbnbEmail = processAirbnbEmail;
-  }
-  if (typeof globalThis.hasValidReservationData === 'undefined') {
-    globalThis.hasValidReservationData = hasValidReservationData;
-  }
-  if (typeof globalThis.extractReservationNumber === 'undefined') {
-    globalThis.extractReservationNumber = extractReservationNumber;
-  }
-  if (typeof globalThis.healthCheck === 'undefined') {
-    globalThis.healthCheck = healthCheck;
-  }
-  if (typeof globalThis.processEmailsWithFallback === 'undefined') {
-    globalThis.processEmailsWithFallback = processEmailsWithFallback;
-  }
+  // Entorno GAS: exponer funciones globalmente
+  globalThis.processEmails = processEmails;
+  globalThis.processAirbnbEmail = processAirbnbEmail;
+  globalThis.hasValidReservationData = hasValidReservationData;
+  globalThis.extractReservationNumber = extractReservationNumber;
+  globalThis.healthCheck = healthCheck;
+  globalThis.processEmailsWithFallback = processEmailsWithFallback;
 }

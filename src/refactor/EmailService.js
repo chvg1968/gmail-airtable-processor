@@ -42,8 +42,18 @@ var EmailService = {
     });
   },
 
+  // Alias para compatibilidad con EmailProcessor
+  getMessages: function (_config) {
+    return this.fetch();
+  },
+
   getCleanBody: function (message) {
     const body = message.getBody();
     return Utils.stripForwardHeaders(body);
   },
 };
+
+// Export for GAS environment
+if (typeof globalThis.EmailService === "undefined") {
+  globalThis.EmailService = EmailService;
+}

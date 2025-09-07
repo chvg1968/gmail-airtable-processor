@@ -59,3 +59,6 @@ const CONFIG = (() => {
 })();
 
 // CONFIG está disponible globalmente para Google Apps Script
+if (typeof globalThis.CONFIG === "undefined") {
+  globalThis.CONFIG = CONFIG;
+}

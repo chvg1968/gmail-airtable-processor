@@ -7,9 +7,12 @@
 
 const EmailFiltersTests = require("./EmailFiltersTests");
 const DuplicateDetectorTests = require("./DuplicateDetectorTests");
-const LodgifyProcessorTests = require("./LodgifyProcessorTests");
 const SharedUtilsTests = require("./SharedUtilsTests");
-const MainRefactoredIntegrationTests = require("./MainRefactoredIntegrationTests");
+const RealEmailPatternsTest = require("./RealEmailPatternsTest");
+const OptimizedPatternsIntegrationTest = require("./OptimizedPatternsIntegrationTest");
+const CompleteIntegrationTests = require("./CompleteIntegrationTests");
+const EndToEndFlowTests = require("./EndToEndFlowTests");
+const MasterIntegrationSuite = require("./MasterIntegrationSuite");
 
 /**
  * Ejecuta todas las suites de pruebas
@@ -38,24 +41,24 @@ function runAllTests() {
     Logger.log("─".repeat(40));
     DuplicateDetectorTests.runExtremeEdgeCases();
 
-    // === PRUEBAS DE LODGIFY PROCESSOR ===
-    Logger.log("\n🏨 EJECUTANDO PRUEBAS DE LODGIFY PROCESSOR");
-    Logger.log("─".repeat(40));
-    LodgifyProcessorTests.runLodgifyProcessorTests();
-    
-    Logger.log("\n🎯 EJECUTANDO CASOS EDGE DE LODGIFY PROCESSOR");
-    Logger.log("─".repeat(40));
-    LodgifyProcessorTests.runLodgifyEdgeCases();
-
   // === PRUEBAS DE SHARED UTILS ===
   Logger.log("\n🧰 EJECUTANDO PRUEBAS DE SHARED UTILS");
   Logger.log("─".repeat(40));
   SharedUtilsTests.runSharedUtilsTests();
 
-  // === PRUEBAS DE INTEGRACIÓN DE MAIN ===
-  Logger.log("\n🧩 EJECUTANDO PRUEBAS DE INTEGRACIÓN (MainRefactored)");
+  // === PRUEBAS DE PATRONES REALES OPTIMIZADOS ===
+  Logger.log("\n🎯 EJECUTANDO PRUEBAS DE PATRONES REALES");
   Logger.log("─".repeat(40));
-  MainRefactoredIntegrationTests.runMainIntegrationTests();
+  RealEmailPatternsTest.runRealEmailPatternsTest();
+
+  Logger.log("\n🚀 EJECUTANDO PRUEBAS DE INTEGRACIÓN OPTIMIZADA");
+  Logger.log("─".repeat(40));
+  OptimizedPatternsIntegrationTest.runSimpleEmailProcessorIntegrationTest();
+
+  // === PRUEBAS DE INTEGRACIÓN COMPLETA (PASO 9) ===
+  Logger.log("\n🎯 EJECUTANDO MASTER INTEGRATION SUITE");
+  Logger.log("─".repeat(40));
+  MasterIntegrationSuite.runMasterIntegrationSuite();
 
     Logger.log("\n" + "═".repeat(60));
     Logger.log("✅ SUITE DE PRUEBAS COMPLETADA EXITOSAMENTE");

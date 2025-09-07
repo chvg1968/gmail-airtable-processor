@@ -158,11 +158,14 @@ if (typeof module !== "undefined" && module.exports) {
     generateReservationId,
   };
 } else {
-  globalThis.DuplicateDetector = {
-    shouldSkipLodgifyDuplicate,
-    normalizeDate,
-    normalizeName,
-    findDuplicateBy,
-    generateReservationId,
-  };
+  // Solo declarar si no existe ya (evita errores de declaración duplicada en GAS)
+  if (typeof globalThis.DuplicateDetector === 'undefined') {
+    globalThis.DuplicateDetector = {
+      shouldSkipLodgifyDuplicate,
+      normalizeDate,
+      normalizeName,
+      findDuplicateBy,
+      generateReservationId,
+    };
+  }
 }

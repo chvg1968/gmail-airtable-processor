@@ -20,7 +20,7 @@
  *         globalThis.SharedUtils = { ... };
  *       (Puedes dejar ambos para seguridad.)
  *     - Pega este archivo (loader) al final y opcionalmente borra las partes Node.
- *     - Asegúrate que el archivo con processEmails (MainRefactored) está al final para que vea todos los globals.
+ *     - Asegúrate que el archivo con processEmails (Main) está al final para que vea todos los globals.
  *
  *  3) GAS con generación automática (opcional futuro):
  *     - Crear un pequeño script de concatenación o usar esbuild para producir un único Code.js.
@@ -57,22 +57,20 @@ function initGlobals() {
   attachGlobal('EmailFilters', safeRequire('./filters/EmailFilters'));
   // Duplicate Detector
   attachGlobal('DuplicateDetector', safeRequire('./duplicates/DuplicateDetector'));
-  // Processors
-  attachGlobal('LodgifyProcessor', safeRequire('./processors/LodgifyProcessor'));
-  attachGlobal('AirbnbProcessor', safeRequire('./processors/AirbnbProcessor'));
-  const pr = safeRequire('./processors/PlatformRegistry');
-  if (pr && pr.PlatformRegistry) attachGlobal('PlatformRegistry', pr.PlatformRegistry);
+  
+  // SIMPLIFIED PROCESSORS - Solo cargar los nuevos simplificados
+  attachGlobal('SimpleEmailProcessor', safeRequire('./processors/SimpleEmailProcessor'));
+  attachGlobal('SimpleLogger', safeRequire('./utils/SimpleLogger').SimpleLogger);
+  
   // Shared
   const su = safeRequire('./shared/SharedUtils');
   if (su && su.SharedUtils) attachGlobal('SharedUtils', su.SharedUtils);
-  const al = safeRequire('./shared/AppLogger');
-  if (al && al.AppLogger) attachGlobal('AppLogger', al.AppLogger);
   const ct = safeRequire('./shared/Constants');
   if (ct && ct.CONSTANTS) attachGlobal('CONSTANTS', ct.CONSTANTS);
 
   // Main (no ejecuta nada, sólo prepara globals si fuera necesario)
-  // Al requerir MainRefactored se registran las funciones de export si estamos en Node.
-  const main = safeRequire('./MainRefactored');
+  // Al requerir Main se registran las funciones de export si estamos en Node.
+  const main = safeRequire('./Main');
   if (main) {
     // Exponer por claridad en entorno Node
     attachGlobal('processEmails', main.processEmails);

@@ -168,12 +168,15 @@ if (typeof module !== "undefined" && module.exports) {
     applyEmailFilters,
   };
 } else {
-  globalThis.EmailFilters = {
-    shouldSkipSupportEmail,
-    isSupportOrUpdateEmail,
-    isNonReservationEmail,
-    shouldSkipForwardedEmail,
-    shouldSkipLodgifyEmail,
-    applyEmailFilters,
-  };
+  // Solo declarar si no existe ya (evita errores de declaración duplicada en GAS)
+  if (typeof globalThis.EmailFilters === 'undefined') {
+    globalThis.EmailFilters = {
+      shouldSkipSupportEmail,
+      isSupportOrUpdateEmail,
+      isNonReservationEmail,
+      shouldSkipForwardedEmail,
+      shouldSkipLodgifyEmail,
+      applyEmailFilters,
+    };
+  }
 }

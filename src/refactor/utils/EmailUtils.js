@@ -63,10 +63,13 @@ if (typeof module !== 'undefined' && module.exports) {
     extractReservationNumber,
   };
 } else {
-  globalThis.EmailUtils = {
-    getFirstName,
-    normalizeToISODate,
-    isEmailFromPlatform,
-    extractReservationNumber,
-  };
+  // Solo declarar si no existe ya (evita errores de declaración duplicada en GAS)
+  if (typeof globalThis.EmailUtils === 'undefined') {
+    globalThis.EmailUtils = {
+      getFirstName,
+      normalizeToISODate,
+      isEmailFromPlatform,
+      extractReservationNumber,
+    };
+  }
 }

@@ -43,11 +43,12 @@ function runEmailProcessorTests() {
       fetch: () => [],
     };
 
-    // Mock AppLogger
-    global.AppLogger = {
-      info: (msg, data) => console.log(`INFO: ${msg}`, data),
-      error: (msg, data) => console.log(`ERROR: ${msg}`, data),
-      airtableOperation: (op, id, data) => console.log(`AIRTABLE: ${op} ${id}`, data),
+        // Mock SimpleLogger
+    global.SimpleLogger = {
+      log: () => {},
+      error: () => {},
+      warn: () => {},
+      info: () => {}
     };
 
     const { EmailProcessor } = require("../core/EmailProcessor");
@@ -217,7 +218,7 @@ function runIntegrationTests() {
       createReservation: () => true,
     };
 
-    global.AppLogger = {
+    global.SimpleLogger = {
       info: () => {},
       error: () => {},
       airtableOperation: () => {},

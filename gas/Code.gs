@@ -1,10 +1,25 @@
 /**
- * Orquestación para Google Apps Script (GAS)
+ * Orquestación para Google Apps Script (GAS) - VERSIÓN REFACTORIZADA
  *
- * Requisitos:
- * - Pega los archivos JS del proyecto en tu script de GAS en este orden aproximado:
- *   shared/*, utils/*, filters/*, duplicates/*, processors/*, servicios (AirtableService, EmailService), MainRefactored.js y Config.js.
- * - `CONFIG` debe estar disponible globalmente (definido en Config.js) y `processEmails` en MainRefactored.js.
+ * Requisitos MÍNIMOS (sin GeminiService):
+ * - Pega los archivos JS del proyecto en tu script de GAS en este orden EXACTO:
+ *   1. Config.js
+ *   2. Utils.js
+ *   3. SimpleLogger.js
+ *   4. DateUtils.js
+ *   5. SharedUtils.js (en /shared/)
+ *   6. EmailFilters.js (en /filters/)
+ *   7. DuplicateDetector.js (en /duplicates/)
+ *   8. SimpleEmailProcessor.js (en /processors/)
+ *   9. EmailService.js
+ *   10. AirtableService.js
+ *   11. PropertyService.js
+ *   12. EmailProcessor.js (en /core/)
+ *   13. Main.js
+ * - `CONFIG` debe estar disponible globalmente (definido en Config.js) y `processEmails` en Main.js.
+ * - GeminiService.js NO es necesario para funcionalidad básica
+ * 
+ * IMPORTANTE: Los archivos deben pegarse en el orden exacto listado arriba para evitar errores de dependencias.
  */
 
 // Ejecuta una corrida en modo seguro (no escribe en Airtable)
@@ -64,15 +79,15 @@ function createTriggers() {
   Logger.log('[GAS] Trigger creado: onTimeTrigger cada 15 minutos');
 }
 
-// Opcional: inicializa Script Properties para Airtable y Gemini
+// Opcional: inicializa Script Properties para Airtable (GeminiService NO requerido)
 function setupScriptProperties() {
   var props = PropertiesService.getScriptProperties();
   var current = props.getProperties();
   var desired = {
     AIRTABLE_API_KEY: current.AIRTABLE_API_KEY || 'REEMPLAZA_AQUI',
     AIRTABLE_BASE_ID: current.AIRTABLE_BASE_ID || 'REEMPLAZA_AQUI',
-    AIRTABLE_TABLE_NAME: current.AIRTABLE_TABLE_NAME || 'REEMPLAZA_AQUI',
-    GEMINI_API_KEY: current.GEMINI_API_KEY || 'REEMPLAZA_AQUI',
+    AIRTABLE_TABLE_NAME: current.AIRTABLE_TABLE_NAME || 'REEMPLAZA_AQUI'
+    // GEMINI_API_KEY eliminado - no necesario para funcionalidad básica
   };
   props.setProperties(desired, true);
   Logger.log('[GAS] Script Properties guardadas. Actualiza los valores REEMPLAZA_AQUI.');
