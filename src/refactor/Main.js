@@ -9,33 +9,18 @@
 
 const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
 
-// Lazy loading para compatibilidad GAS/Node - SIMPLIFICADO
-let EmailProcessor, SimpleLogger, SimpleEmailProcessor, SharedUtils;
+// Contenedor de dependencias centralizado
+let container;
 
-function ensureDependencies() {
-  if (__IS_NODE__) {
-    if (!EmailProcessor) {
-      const { EmailProcessor: EP } = require("./core/EmailProcessor");
-      EmailProcessor = EP;
+function getContainer() {
+  if (!container) {
+    if (__IS_NODE__) {
+      container = require("./DependencyContainer").DependencyContainer;
+    } else {
+      container = globalThis.DependencyContainer;
     }
-    if (!SimpleLogger) {
-      const { SimpleLogger: SL } = require("./utils/SimpleLogger");
-      SimpleLogger = SL;
-    }
-    if (!SimpleEmailProcessor) {
-      SimpleEmailProcessor = require("./processors/SimpleEmailProcessor");
-    }
-    if (!SharedUtils) {
-      const { SharedUtils: SU } = require("./shared/SharedUtils");
-      SharedUtils = SU;
-    }
-  } else {
-    // GAS environment
-    if (!EmailProcessor) EmailProcessor = globalThis.EmailProcessor;
-    if (!SimpleLogger) SimpleLogger = globalThis.SimpleLogger;
-    if (!SimpleEmailProcessor) SimpleEmailProcessor = globalThis.SimpleEmailProcessor;
-    if (!SharedUtils) SharedUtils = globalThis.SharedUtils;
   }
+  return container;
 }
 
 /**
@@ -44,8 +29,11 @@ function ensureDependencies() {
  */
 async function processEmails() {
   try {
-    ensureDependencies();
-    
+    const container = getContainer();
+    const SimpleLogger = container.get('SimpleLogger');
+    const EmailProcessor = container.get('EmailProcessor');
+    const CONFIG = container.get('CONFIG');
+
     // Log de inicio usando SimpleLogger
     SimpleLogger.start("PROCESAMIENTO DE EMAILS", {
       safeMode: CONFIG.SAFE_MODE,
@@ -79,70 +67,58 @@ Success Rate: ${((result.processedInAirtable / result.total) * 100).toFixed(1)}%
     return result;
 
   } catch (error) {
+    const container = getContainer();
+    const SimpleLogger = container.get('SimpleLogger');
     const errorMsg = `ERROR CRÍTICO en processEmails: ${error.message}`;
-    
+
     if (SimpleLogger) {
-      SimpleLogger.error(errorMsg, { 
+      SimpleLogger.error(errorMsg, {
         stack: error.stack,
         environment: __IS_NODE__ ? 'Node.js' : 'Google Apps Script'
       });
     }
-    
+
     if (typeof Logger !== 'undefined') {
       Logger.log(errorMsg);
     }
-    
+
     throw error;
   }
 }
 
 /**
- * Funciones de compatibilidad SIMPLIFICADAS
- * Usan SimpleEmailProcessor para mantener compatibilidad con código legacy
+ * Funciones de compatibilidad - Delegan a módulos especializados
  */
 
 // Función legacy usando SimpleEmailProcessor
 function processAirbnbEmail(msg, body, subject, from) {
-  ensureDependencies();
-  
+  const container = getContainer();
+  const SimpleLogger = container.get('SimpleLogger');
+  const SimpleEmailProcessor = container.get('SimpleEmailProcessor');
+
   SimpleLogger.debug("Procesando Airbnb via función legacy", { subject });
-  
+
   // Usar SimpleEmailProcessor directamente
   return SimpleEmailProcessor.processAirbnbEmail(from, subject, body);
 }
-
-function hasValidReservationData(dto) {
-  ensureDependencies();
-  return SharedUtils.hasValidReservationData(dto);
-}
-
-// function extractReservationNumber(platform, subject, body) {
-//   ensureDependencies();
-  
-//   // Usar SimpleEmailProcessor para extraer número de reserva
-//   const quickInfo = SimpleEmailProcessor.getQuickReservationInfo(subject);
-//   return quickInfo ? quickInfo.reservationNumber : null;
-// }
 
 /**
  * Función de health check SIMPLIFICADA
  * Verifica todas las dependencias modernas
  */
 function healthCheck() {
-  ensureDependencies();
-  
+  const container = getContainer();
+  const SimpleLogger = container.get('SimpleLogger');
+
   const checks = {
-    EmailProcessor: !!EmailProcessor,
-    SimpleLogger: !!SimpleLogger,
-    SimpleEmailProcessor: !!SimpleEmailProcessor,
-    SharedUtils: !!SharedUtils,
-    CONFIG: typeof CONFIG !== 'undefined',
+    DependencyContainer: !!container,
     environment: __IS_NODE__ ? 'Node.js' : 'Google Apps Script',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ...container.healthCheck()
   };
 
   SimpleLogger.info("Health Check Main.js", checks);
-  
+
   return checks;
 }
 
@@ -154,12 +130,15 @@ function processEmailsWithFallback() {
   try {
     return processEmails();
   } catch (error) {
+    const container = getContainer();
+    const SimpleLogger = container.get('SimpleLogger');
+
     SimpleLogger.error("Error en Main.js simplificado", { error: error.message });
-    
+
     if (typeof Logger !== 'undefined') {
       Logger.log(`[Main] Error en procesador simplificado: ${error.message}`);
     }
-    
+
     throw error; // Ya no hay fallback - debe funcionar el código simplificado
   }
 }
@@ -169,12 +148,10 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     // Función principal
     processEmails,
-    
+
     // Funciones de compatibilidad
     processAirbnbEmail,
-    hasValidReservationData,
-    extractReservationNumber,
-    
+
     // Utilidades
     healthCheck,
     processEmailsWithFallback,
@@ -186,12 +163,6 @@ if (typeof module !== 'undefined' && module.exports) {
   }
   if (typeof globalThis.processAirbnbEmail === 'undefined') {
     globalThis.processAirbnbEmail = processAirbnbEmail;
-  }
-  if (typeof globalThis.hasValidReservationData === 'undefined') {
-    globalThis.hasValidReservationData = hasValidReservationData;
-  }
-  if (typeof globalThis.extractReservationNumber === 'undefined') {
-    globalThis.extractReservationNumber = extractReservationNumber;
   }
   if (typeof globalThis.healthCheck === 'undefined') {
     globalThis.healthCheck = healthCheck;

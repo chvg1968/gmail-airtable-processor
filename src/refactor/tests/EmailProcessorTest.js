@@ -124,7 +124,6 @@ function runEmailProcessorTests() {
     
     Assert.hasProperty(MainNew, "processEmails", "Función principal debe existir");
     Assert.hasProperty(MainNew, "processAirbnbEmail", "Función legacy debe existir");
-    Assert.hasProperty(MainNew, "hasValidReservationData", "Función legacy debe existir");
     Assert.hasProperty(MainNew, "healthCheck", "Función healthCheck debe existir");
 
     // Test health check

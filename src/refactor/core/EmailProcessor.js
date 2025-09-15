@@ -15,27 +15,54 @@ class EmailProcessor {
     this.skippedCount = 0;
   }
 
-  processEmails() {
+  async processEmails() {
     try {
-      SimpleLogger?.start("procesamiento de emails", { SAFE_MODE: CONFIG?.SAFE_MODE });
-      
-      const messages = EmailService.fetch();
-      SimpleLogger?.gmail("Mensajes obtenidos", messages.length);
-      
+      this.logProcessingStart();
+
+      const messages = await this.fetchMessages();
       const sortedMessages = this.sortMessagesByPlatform(messages);
-      
-      for (const msg of sortedMessages) {
-        this.processMessage(msg);
-      }
+
+      await this.processAllMessages(sortedMessages);
 
       const result = this.getProcessingSummary();
-      SimpleLogger?.finish("procesamiento de emails", result);
+      this.logProcessingFinish(result);
       return result;
-      
+
     } catch (error) {
-      SimpleLogger?.error("Error crítico en procesamiento", { error: error.message });
+      this.logProcessingError(error);
       throw error;
     }
+  }
+
+  logProcessingStart() {
+    const logger = this.getLogger();
+    const config = this.getConfig();
+    logger?.start("procesamiento de emails", { SAFE_MODE: config?.SAFE_MODE });
+  }
+
+  async fetchMessages() {
+    const emailService = this.getEmailService();
+    const logger = this.getLogger();
+
+    const messages = emailService.fetch();
+    logger?.gmail("Mensajes obtenidos", messages.length);
+    return messages;
+  }
+
+  async processAllMessages(messages) {
+    for (const msg of messages) {
+      await this.processMessage(msg);
+    }
+  }
+
+  logProcessingFinish(result) {
+    const logger = this.getLogger();
+    logger?.finish("procesamiento de emails", result);
+  }
+
+  logProcessingError(error) {
+    const logger = this.getLogger();
+    logger?.error("Error crítico en procesamiento", { error: error.message });
   }
 
   sortMessagesByPlatform(messages) {
@@ -59,21 +86,21 @@ class EmailProcessor {
     return fromLower.includes('airbnb') || fromLower.includes('automated-noreply@airbnb.com');
   }
 
-  processMessage(msg) {
+  async processMessage(msg) {
     const messageId = msg.getId();
     const from = msg.getFrom();
     const subject = msg.getSubject();
 
     try {
-      if (this.shouldSkipMessage(from, subject, messageId)) {
+      if (await this.shouldSkipMessage(from, subject, messageId)) {
         this.skippedCount++;
         return;
       }
 
-      const dto = this.processMessageByPlatform(msg);
-      
+      const dto = await this.processMessageByPlatform(msg);
+
       if (dto && this.shouldProcessDTO(dto)) {
-        this.saveReservation(dto, messageId);
+        await this.saveReservation(dto, messageId);
         this.trackProcessedReservation(dto);
         this.processedCount++;
       } else {
@@ -81,7 +108,8 @@ class EmailProcessor {
       }
 
     } catch (error) {
-      SimpleLogger?.error("Error procesando mensaje", { subject, error: error.message });
+      const logger = this.getLogger();
+      logger?.error("Error procesando mensaje", { subject, error: error.message });
       this.skippedCount++;
     }
   }
@@ -107,17 +135,22 @@ class EmailProcessor {
     };
   }
 
-  shouldSkipMessage(from, subject, messageId) {
+  async shouldSkipMessage(from, subject, messageId) {
+    const logger = this.getLogger();
+    const config = this.getConfig();
+
     // Aplicar filtros de email
-    const filterResult = EmailFilters?.applyEmailFilters(from, subject);
+    const emailFilters = this.getEmailFilters();
+    const filterResult = emailFilters?.applyEmailFilters(from, subject);
     if (filterResult?.shouldSkip) {
-      SimpleLogger?.email("Skip por filtro", subject, { reason: filterResult.reason, from });
+      logger?.email("Skip por filtro", subject, { reason: filterResult.reason, from });
       return true;
     }
 
     // Verificar si ya fue procesado
-    if (AirtableService?.isMessageProcessed(CONFIG, messageId)) {
-      SimpleLogger?.email("Skip por mensaje ya procesado", subject, { messageId });
+    const airtableService = this.getAirtableService();
+    if (airtableService?.isMessageProcessed(config, messageId)) {
+      logger?.email("Skip por mensaje ya procesado", subject, { messageId });
       return true;
     }
 
@@ -210,9 +243,75 @@ class EmailProcessor {
       total: this.processedCount + this.skippedCount,
       processedInAirtable: this.processedCount,
       skipped: this.skippedCount,
-      successRate: this.processedCount + this.skippedCount > 0 ? 
+      successRate: this.processedCount + this.skippedCount > 0 ?
         ((this.processedCount / (this.processedCount + this.skippedCount)) * 100).toFixed(1) : 0
     };
+  }
+
+  // Métodos auxiliares para obtener dependencias
+  getLogger() {
+    const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
+    if (__IS_NODE__) {
+      try {
+        return require('../utils/SimpleLogger').SimpleLogger;
+      } catch {
+        return null;
+      }
+    } else {
+      return globalThis.SimpleLogger;
+    }
+  }
+
+  getEmailService() {
+    const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
+    if (__IS_NODE__) {
+      try {
+        return require('../EmailService');
+      } catch {
+        return null;
+      }
+    } else {
+      return globalThis.EmailService;
+    }
+  }
+
+  getConfig() {
+    const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
+    if (__IS_NODE__) {
+      try {
+        return require('../Config');
+      } catch {
+        return null;
+      }
+    } else {
+      return globalThis.CONFIG;
+    }
+  }
+
+  getEmailFilters() {
+    const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
+    if (__IS_NODE__) {
+      try {
+        return require('../filters/EmailFilters');
+      } catch {
+        return null;
+      }
+    } else {
+      return globalThis.EmailFilters;
+    }
+  }
+
+  getAirtableService() {
+    const __IS_NODE__ = (typeof require !== 'undefined') && (typeof module !== 'undefined');
+    if (__IS_NODE__) {
+      try {
+        return require('../AirtableService');
+      } catch {
+        return null;
+      }
+    } else {
+      return globalThis.AirtableService;
+    }
   }
 }
 

@@ -42,30 +42,31 @@ if (__IS_NODE__) {
     console.log('❌ processAirbnbEmail no funcionó');
   }
   
-  // Test extractReservationNumber
+  // Test extractReservationNumber (usando DateUtils directamente)
   console.log('\n3. Extracción de número de reserva:');
-  const resNumber = Main.extractReservationNumber(
-    'airbnb',
-    'Reservation confirmed: John Smith #ABC123, arriving September 7, 2025',
-    'test body'
+  const DateUtils = require('../utils/DateUtils');
+  const resInfo = DateUtils.extractReservationInfo(
+    'Reservation confirmed: John Smith #ABC123, arriving September 7, 2025'
   );
-  console.log('Número extraído:', resNumber);
-  
-  // Test hasValidReservationData
+  console.log('Información extraída:', resInfo);
+
+  // Test hasValidReservationData (usando SharedUtils directamente)
   console.log('\n4. Validación de datos de reserva:');
+  const SharedUtils = require('../shared/SharedUtils').SharedUtils;
   const validData = {
     guestName: 'John Smith',
     checkInDate: '2025-09-07',
+    checkOutDate: '2025-09-10',
     platform: 'Airbnb'
   };
-  
+
   const invalidData = {
     platform: 'Airbnb'
     // Faltan campos requeridos
   };
-  
-  console.log('Datos válidos:', Main.hasValidReservationData(validData));
-  console.log('Datos inválidos:', Main.hasValidReservationData(invalidData));
+
+  console.log('Datos válidos:', SharedUtils.hasValidReservationData(validData));
+  console.log('Datos inválidos:', SharedUtils.hasValidReservationData(invalidData));
   
   // Test 5: Verificar que processEmails no falla (aunque no tengamos EMAIL_SERVICE real)
   console.log('\n5. Test de processEmails (simulado):');

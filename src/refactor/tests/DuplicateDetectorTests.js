@@ -5,6 +5,7 @@
 
 const { TestFramework, Assert } = require("./TestFramework");
 const DuplicateDetector = require("../duplicates/DuplicateDetector");
+const { SharedUtils } = require("../shared/SharedUtils");
 
 function runDuplicateDetectorTests() {
   const test = new TestFramework();
@@ -12,52 +13,52 @@ function runDuplicateDetectorTests() {
   // === ¿QUÉ PASA SI... hay nombres con variaciones? ===
 
   test.test("¿Qué pasa si un nombre tiene espacios extra?", () => {
-    const name1 = DuplicateDetector.normalizeName("  John   Smith  ");
-    const name2 = DuplicateDetector.normalizeName("John Smith");
+    const name1 = SharedUtils.normalizeName("  John   Smith  ");
+    const name2 = SharedUtils.normalizeName("John Smith");
     Assert.equals(name1, name2, "Nombres con espacios extra deberían ser iguales");
   });
 
   test.test("¿Qué pasa si hay diferencias de mayúsculas?", () => {
-    const name1 = DuplicateDetector.normalizeName("MARIA GONZALEZ");
-    const name2 = DuplicateDetector.normalizeName("maria gonzalez");
+    const name1 = SharedUtils.normalizeName("MARIA GONZALEZ");
+    const name2 = SharedUtils.normalizeName("maria gonzalez");
     Assert.equals(name1, name2, "Mayúsculas y minúsculas deberían ser iguales");
   });
 
   test.test("¿Qué pasa si el nombre es null?", () => {
-    const result = DuplicateDetector.normalizeName(null);
+    const result = SharedUtils.normalizeName(null);
     Assert.equals(result, "", "Nombre null debería retornar string vacío");
   });
 
   test.test("¿Qué pasa si el nombre es un número?", () => {
-    const result = DuplicateDetector.normalizeName(123);
+    const result = SharedUtils.normalizeName(123);
     Assert.equals(result, "", "Número como nombre debería retornar string vacío");
   });
 
   // === ¿QUÉ PASA SI... hay fechas en diferentes formatos? ===
 
   test.test("¿Qué pasa si la fecha es en formato ISO?", () => {
-    const result = DuplicateDetector.normalizeDate("2024-12-25");
+    const result = SharedUtils.normalizeDate("2024-12-25");
     Assert.equals(result, "2024-12-25", "Fecha ISO debería mantenerse igual");
   });
 
   test.test("¿Qué pasa si la fecha es en formato US?", () => {
-    const result = DuplicateDetector.normalizeDate("12/25/2024");
+    const result = SharedUtils.normalizeDate("12/25/2024");
     Assert.equals(result, "2024-12-25", "Fecha US debería convertirse a ISO");
   });
 
   test.test("¿Qué pasa si la fecha es un objeto Date?", () => {
     const dateObj = new Date("2024-12-25");
-    const result = DuplicateDetector.normalizeDate(dateObj);
+    const result = SharedUtils.normalizeDate(dateObj);
     Assert.equals(result, "2024-12-25", "Objeto Date debería convertirse a ISO");
   });
 
   test.test("¿Qué pasa si la fecha es inválida?", () => {
-    const result = DuplicateDetector.normalizeDate("fecha-invalida");
+    const result = SharedUtils.normalizeDate("fecha-invalida");
     Assert.isNull(result, "Fecha inválida debería retornar null");
   });
 
   test.test("¿Qué pasa si la fecha es null?", () => {
-    const result = DuplicateDetector.normalizeDate(null);
+    const result = SharedUtils.normalizeDate(null);
     Assert.isNull(result, "Fecha null debería retornar null");
   });
 
@@ -296,13 +297,13 @@ function runExtremeEdgeCases() {
   const test = new TestFramework();
 
   test.test("🚨 ¿Qué pasa si hay nombres con caracteres especiales?", () => {
-    const name1 = DuplicateDetector.normalizeName("José María Ñoño");
-    const name2 = DuplicateDetector.normalizeName("JOSÉ MARÍA ÑOÑO");
+    const name1 = SharedUtils.normalizeName("José María Ñoño");
+    const name2 = SharedUtils.normalizeName("JOSÉ MARÍA ÑOÑO");
     Assert.equals(name1, name2, "Caracteres especiales deberían normalizarse");
   });
 
   test.test("🚨 ¿Qué pasa si la fecha es '31/02/2024' (inválida)?", () => {
-    const result = DuplicateDetector.normalizeDate("31/02/2024");
+    const result = SharedUtils.normalizeDate("31/02/2024");
     Assert.isNull(result, "Fecha imposible debería retornar null");
   });
 

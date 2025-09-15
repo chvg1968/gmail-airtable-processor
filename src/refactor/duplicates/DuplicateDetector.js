@@ -60,23 +60,6 @@ function shouldSkipLodgifyDuplicate(reservation, existingRecords) {
   return hasMatch;
 }
 
-/**
- * Normaliza una fecha a formato ISO para comparación consistente
- * @param {string|Date} dateInput - Fecha en cualquier formato
- * @returns {string|null} - Fecha en formato YYYY-MM-DD o null si inválida
- */
-function normalizeDate(dateInput) {
-  return SharedUtils.normalizeDate(dateInput);
-}
-
-/**
- * Normaliza un nombre para comparación consistente
- * @param {string} name - Nombre a normalizar
- * @returns {string} - Nombre normalizado (lowercase, sin espacios extra)
- */
-function normalizeName(name) {
-  return SharedUtils.normalizeName(name);
-}
 
 /**
  * Busca duplicados por múltiples criterios
@@ -97,13 +80,13 @@ function findDuplicateBy(newReservation, existingRecords, criteria) {
       switch (criterion) {
         case "firstName":
           return (
-            normalizeName(newReservation.firstName) ===
-            normalizeName(existing.fields["First Name"])
+            SharedUtils.normalizeName(newReservation.firstName) ===
+            SharedUtils.normalizeName(existing.fields["First Name"])
           );
         case "arrivalDate":
           return (
-            normalizeDate(newReservation.arrivalDate) ===
-            normalizeDate(existing.fields["Check-in"])
+            SharedUtils.normalizeDate(newReservation.arrivalDate) ===
+            SharedUtils.normalizeDate(existing.fields["Check-in"])
           );
         case "reservationNumber":
           return (
@@ -134,9 +117,9 @@ function generateReservationId(reservation, criteria = ["firstName", "arrivalDat
   const parts = criteria.map((criterion) => {
     switch (criterion) {
       case "firstName":
-        return normalizeName(reservation.firstName || "");
+        return SharedUtils.normalizeName(reservation.firstName || "");
       case "arrivalDate":
-        return normalizeDate(reservation.arrivalDate) || "";
+        return SharedUtils.normalizeDate(reservation.arrivalDate) || "";
       case "reservationNumber":
         return reservation.reservationNumber || "";
       case "email":
@@ -152,8 +135,6 @@ function generateReservationId(reservation, criteria = ["firstName", "arrivalDat
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     shouldSkipLodgifyDuplicate,
-    normalizeDate,
-    normalizeName,
     findDuplicateBy,
     generateReservationId,
   };
@@ -162,8 +143,6 @@ if (typeof module !== "undefined" && module.exports) {
   if (typeof globalThis.DuplicateDetector === 'undefined') {
     globalThis.DuplicateDetector = {
       shouldSkipLodgifyDuplicate,
-      normalizeDate,
-      normalizeName,
       findDuplicateBy,
       generateReservationId,
     };

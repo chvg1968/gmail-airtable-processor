@@ -193,65 +193,81 @@ function processReservationEmail(from, subject, body) {
   const platform = identifyPlatform(from);
   
   // 3. Extraer datos básicos desde el asunto (intento rápido)
-  let reservationData = extractReservationData(subject);
+  let reservationData = extractReservationData(subject) || {};
 
-  // 4. Si los datos del asunto son insuficientes y es Airbnb, usar Gemini como fallback
-  if (platform === 'airbnb' && (!reservationData || !reservationData.reservationNumber)) {
+  // 4. Si faltan campos críticos para Airbnb, usar Gemini como fallback para leer el body
+  const needsGeminiForAirbnb = (
+    platform === 'airbnb' && (
+      !reservationData.reservationNumber ||
+      !reservationData.arrivalDate ||
+      !reservationData.checkOutDate ||
+      !reservationData.guestName // full name
+    )
+  );
+
+  if (needsGeminiForAirbnb) {
     const geminiService = getGeminiService();
     if (geminiService) {
-      logger.info("Datos insuficientes en asunto de Airbnb, usando Gemini en el cuerpo.", { subject });
-      
-      // Gemini necesita el año para interpretar fechas sin año
+      logger?.info("Datos insuficientes en asunto de Airbnb, usando Gemini en el cuerpo.", { subject });
       const currentYear = new Date().getFullYear();
-      const geminiData = geminiService.extract(body, CONFIG.geminiApiKey, currentYear); // API Key se gestiona dentro de GeminiService
-      
-      if (geminiData && geminiData.reservationNumber) {
-        // Combinar datos: los de Gemini son más completos
+      const apiKey = (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.geminiApiKey) ? CONFIG.geminiApiKey : null;
+      const geminiData = geminiService.extract(body, apiKey, currentYear);
+
+      if (geminiData && (geminiData.reservationNumber || geminiData.checkInDate || geminiData.checkOutDate)) {
+        // Combinar datos, dando prioridad a lo que venga de Gemini
         reservationData = {
-          firstName: geminiData.guestName,
-          arrivalDate: geminiData.checkInDate,
-          reservationNumber: geminiData.reservationNumber,
-          // ... otros campos que Gemini pueda devolver
+          ...reservationData,
+          _extractedFrom: 'body:gemini',
+          firstName: reservationData.firstName || (geminiData.guestName ? String(geminiData.guestName).split(' ')[0] : ''),
+          guestName: geminiData.guestName || reservationData.guestName || reservationData.firstName || '',
+          arrivalDate: geminiData.checkInDate || reservationData.arrivalDate || '',
+          checkOutDate: geminiData.checkOutDate || reservationData.checkOutDate || '',
+          reservationNumber: geminiData.reservationNumber || reservationData.reservationNumber || ''
         };
-        logger.info("Datos extraídos con Gemini", { reservationNumber: geminiData.reservationNumber });
+        logger?.info("Datos extraídos con Gemini", { reservationNumber: reservationData.reservationNumber });
       } else {
-        logger.warn("Gemini no pudo extraer los datos necesarios.", { subject });
-        return null; // Si ni el asunto ni Gemini funcionan, no se puede procesar
+        logger?.warn("Gemini no pudo extraer los datos necesarios.", { subject });
       }
     }
   }
 
-  // Si después de todos los intentos no hay datos, no continuar
-  if (!reservationData) {
-    logger.warn("No se pudieron extraer datos de la reserva.", { subject });
+  // Si después de todos los intentos no hay datos mínimos, no continuar
+  if (!reservationData || (!reservationData.arrivalDate && !reservationData.checkInDate)) {
+    logger?.warn("No se pudieron extraer datos de la reserva.", { subject });
     return null;
   }
 
-  // 5. Crear resultado unificado
+  // Normalizar nombres de campos al contrato esperado aguas abajo
+  const guestName = reservationData.guestName || reservationData.firstName || '';
+  const checkInDate = reservationData.checkInDate || reservationData.arrivalDate || '';
+  const checkOutDate = reservationData.checkOutDate || '';
+  const reservationNumber = reservationData.reservationNumber || '';
+
   const result = {
-    platform: platform.charAt(0).toUpperCase() + platform.slice(1), // Capitalize
-    firstName: reservationData.firstName,
-    arrivalDate: reservationData.arrivalDate,
-    reservationNumber: reservationData.reservationNumber,
+    platform: platform.charAt(0).toUpperCase() + platform.slice(1), // Capitalize (p.ej. 'Airbnb')
+    guestName,
+    checkInDate,
+    checkOutDate,
+    reservationNumber,
+
+    // Mantener campos raw para trazabilidad
     rawSubject: subject,
     rawFrom: from,
     rawBody: body,
-    
+
     // Metadata para debugging
     _processingInfo: {
-      extractedFrom: reservationData._extractedFrom || 'subject', // Indicar si vino de gemini
+      extractedFrom: reservationData._extractedFrom || 'subject',
       platform: platform,
       timestamp: new Date().toISOString()
     }
   };
 
-  if (logger) {
-    logger.info("Procesado email de reserva", {
-      platform,
-      firstName: reservationData.firstName,
-      arrivalDate: reservationData.arrivalDate
-    });
-  }
+  logger?.info("Procesado email de reserva", {
+    platform,
+    firstName: reservationData.firstName || '',
+    arrivalDate: checkInDate
+  });
   
   return result;
 }
