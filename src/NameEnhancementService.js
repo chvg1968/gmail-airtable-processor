@@ -5,18 +5,19 @@
  * Especialmente útil para corregir nombres truncados de Airbnb
  */
 var NameEnhancementService = {
+  
   /**
    * Extrae el nombre del huésped desde el asunto del email.
    * @param {string} subject El asunto del email.
    * @returns {string|null} El nombre extraído o null.
    */
-  extractGuestNameFromSubject: function (subject) {
+  extractGuestNameFromSubject: function(subject) {
     // Vrbo: "Instant Booking from Natasha Schooling: ..."
     const vrboMatch = subject.match(/from\s+([^:]+):/i);
     if (vrboMatch && vrboMatch[1]) {
       return this.toTitleCase(vrboMatch[1].trim());
     }
-
+  
     // Airbnb: "Reservation confirmed - Rosemary Vega-Chang arrives Aug 3"
     const parts = subject.split(" - ");
     if (parts.length > 1) {
@@ -26,7 +27,7 @@ var NameEnhancementService = {
         return this.toTitleCase(nameParts[0].trim());
       }
     }
-
+  
     return null;
   },
 
@@ -36,22 +37,19 @@ var NameEnhancementService = {
    * @param {Object} message El mensaje de Gmail.
    * @returns {Object} Los datos mejorados.
    */
-  enhanceExtractedData: function (extractedData, message) {
+  enhanceExtractedData: function(extractedData, message) {
     const subject = message.getSubject();
     const nameFromSubject = this.extractGuestNameFromSubject(subject);
-    const fromHeader = message.getFrom() || "";
-    const isAirbnb =
-      fromHeader.toLowerCase().includes("airbnb.com") ||
-      (extractedData.platform &&
-        Array.isArray(extractedData.platform) &&
-        extractedData.platform[0] === "Airbnb");
+    const fromHeader = message.getFrom() || '';
+    const isAirbnb = fromHeader.toLowerCase().includes('airbnb.com') || 
+                     (extractedData.platform && 
+                      Array.isArray(extractedData.platform) && 
+                      extractedData.platform[0] === 'Airbnb');
 
     // Mejorar el nombre del huésped
     if (!extractedData.guestName && nameFromSubject) {
       extractedData.guestName = nameFromSubject;
-      Logger.log(
-        `[NameEnhancementService] ✅ Caso 1: No había guestName, usando nameFromSubject: "${nameFromSubject}"`
-      );
+      Logger.log(`[NameEnhancementService] ✅ Caso 1: No había guestName, usando nameFromSubject: "${nameFromSubject}"`);
     } else if (
       extractedData.guestName &&
       !extractedData.guestName.includes(" ") &&
@@ -62,25 +60,16 @@ var NameEnhancementService = {
       nameFromSubject.includes(" ")
     ) {
       extractedData.guestName = nameFromSubject;
-      Logger.log(
-        `[NameEnhancementService] ✅ Caso 2: guestName solo primer nombre, mejorando con nameFromSubject completo: "${nameFromSubject}"`
-      );
+      Logger.log(`[NameEnhancementService] ✅ Caso 2: guestName solo primer nombre, mejorando con nameFromSubject completo: "${nameFromSubject}"`);
     } else if (isAirbnb && nameFromSubject && extractedData.guestName) {
-      // Para Airbnb, si tenemos un nombre del asunto y un guestName existente,
+      // Para Airbnb, si tenemos un nombre del asunto y un guestName existente, 
       // preferir el del asunto si es más completo
-      if (
-        nameFromSubject.includes(" ") &&
-        !extractedData.guestName.includes(" ")
-      ) {
+      if (nameFromSubject.includes(" ") && !extractedData.guestName.includes(" ")) {
         extractedData.guestName = nameFromSubject;
-        Logger.log(
-          `[NameEnhancementService] ✅ Caso 3: Airbnb - Prefiriendo nombre completo del asunto: "${nameFromSubject}"`
-        );
+        Logger.log(`[NameEnhancementService] ✅ Caso 3: Airbnb - Prefiriendo nombre completo del asunto: "${nameFromSubject}"`);
       } else if (nameFromSubject.length > extractedData.guestName.length) {
         extractedData.guestName = nameFromSubject;
-        Logger.log(
-          `[NameEnhancementService] ✅ Caso 4: Airbnb - Prefiriendo nombre más largo del asunto: "${nameFromSubject}"`
-        );
+        Logger.log(`[NameEnhancementService] ✅ Caso 4: Airbnb - Prefiriendo nombre más largo del asunto: "${nameFromSubject}"`);
       }
     }
 
@@ -100,8 +89,9 @@ var NameEnhancementService = {
    * @param {string} str La cadena a convertir.
    * @returns {string} La cadena en formato título.
    */
-  toTitleCase: function (str) {
+  toTitleCase: function(str) {
     if (!str) return str;
     return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
-  },
+  }
 };
+

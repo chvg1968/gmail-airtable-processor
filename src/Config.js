@@ -16,7 +16,7 @@ const CONFIG = (() => {
   }
 
   // Constantes alineadas con src/googlescript.js
-  const LOCAL_CONSTANTS = {
+  const CONSTANTS = {
     DATE_REVIEW: {
       MAX_DAYS_AHEAD: 180, // ~6 meses (más realista para vacaciones)
       FUTURE_YEAR_THRESHOLD: 2027, // Actualizado para 2025
@@ -54,11 +54,9 @@ const CONFIG = (() => {
 
     // Flags y constantes
     SAFE_MODE,
-  CONSTANTS: LOCAL_CONSTANTS,
+    CONSTANTS,
   };
 })();
 
-// CONFIG está disponible globalmente para Google Apps Script
-if (typeof globalThis.CONFIG === "undefined") {
-  globalThis.CONFIG = CONFIG;
-}
+
+
