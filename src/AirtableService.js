@@ -203,8 +203,7 @@ const AirtableService = (() => {
       Children: dto.children ?? dto.Children ?? 0,
       "Booking Date": dto.bookingDate || dto["Booking Date"] || null,
       Platform: platform,
-      "Reservation number":
-        dto.reservationNumber || dto["Reservation number"] || "",
+      "Reservation number": dto.reservationNumber || dto["Reservation number"] || "",
       Accommodation: accommodation,
       Discount: discount,
       "Cleaning Fee": cleaningFee,
@@ -212,9 +211,9 @@ const AirtableService = (() => {
       Taxes: taxes,
       "D. Protection": dProtection,
       "Needs Date Review": needsDateReview,
-      "Vrbo value 1 or Airbnb value":
-        platform === "Vrbo" ? vrboValue1 : airbnbHostServiceFee,
+      "Vrbo value 1 or Airbnb value": platform === "Vrbo" ? vrboValue1 : airbnbHostServiceFee,
       "Vrbo value 2": platform === "Vrbo" ? vrboValue2 : 0,
+      dupKey: dto.dupKey || "",
     };
 
     // Limpiar nulos/undefined

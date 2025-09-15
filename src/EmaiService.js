@@ -11,19 +11,17 @@ var EmailService = {
     const days = CONFIG.CONSTANTS.EMAIL_SEARCH.DAYS_BACK;
     const timeFilter = `newer_than:${days}d`;
     const scope = "in:anywhere";
-    // Broadened patterns to catch forwards/varied senders
-    const airbnb =
-      '((from:airbnb.com) OR (subject:"Reservation confirmed" AND (Airbnb OR airbnb)))';
-    // Vrbo: permitimos asunto que contenga "Vrbo" ya que Lodgify puede reenviar/transformar
-    const vrbo = '((from:vrbo.com OR from:homeaway.com) OR subject:(Vrbo))';
-    // Lodgify: solo las confirmaciones de reserva enviadas por el messaging gateway
-    // con subject que empieza con "New Confirmed Booking"
-    const lodgify =
-      '(from:no-reply@messaging.lodgify.com subject:"New Confirmed Booking" subject:-update -request -ticket -help -support)';
-    // Exclusiones globales de remitentes de soporte/recordatorios
-    const globalExcludes = "-from:help@lodgify.com";
-    // Agrupar la consulta para que los excludes apliquen al conjunto
-    return `${scope} ((${airbnb}) OR (${vrbo}) OR (${lodgify})) ${timeFilter} ${globalExcludes}`;
+
+    // Filtros simplificados basados en el trigger de n8n
+    // Solo correos de confirmación reales de plataformas principales
+    const airbnb = 'from:@airbnb.com subject:"Reservation confirmed"';
+    const lodgify = 'from:no-reply@messaging.lodgify.com subject:"New Confirmed Booking"';
+    const vrbo = '(from:@homeaway.com OR from:@vrbo.com) subject:"confirmed booking"';
+
+    // Exclusiones mínimas: solo soporte y ayuda
+    const globalExcludes = "-from:help@lodgify.com -subject:(update OR request OR ticket OR help OR support)";
+
+    return `${scope} ((${airbnb}) OR (${lodgify}) OR (${vrbo})) ${timeFilter} ${globalExcludes}`;
   },
 
   fetch: function () {
@@ -33,13 +31,8 @@ var EmailService = {
     Logger.log(`[EmailService] Threads encontrados: ${threads.length}`);
     const messages = threads.flatMap((t) => t.getMessages());
     Logger.log(`[EmailService] Mensajes encontrados: ${messages.length}`);
-    // Orden: procesar Lodgify al final (para que preferencia Airbnb tenga oportunidad de existir primero)
-    return messages.sort((a, b) => {
-      const aIsL = /lodgify/i.test(a.getFrom());
-      const bIsL = /lodgify/i.test(b.getFrom());
-      if (aIsL === bIsL) return 0;
-      return aIsL ? 1 : -1;
-    });
+    // Procesar en orden cronológico (más reciente primero)
+    return messages.sort((a, b) => b.getDate() - a.getDate());
   },
 
   getCleanBody: function (message) {

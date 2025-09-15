@@ -1,0 +1,1648 @@
+{
+  "name": "GmailAirtable",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a data extraction system. Extract booking information from the email data and return ONLY a valid JSON object. Do not include markdown, code blocks, or explanatory text.\n\nCRITICAL: Your response must start with { and end with }. No ```json or other formatting.\n\nEMAIL DATA TO EXTRACT FROM:\nID: {{ $json.id }}\nSUBJECT: {{ $json.subject || '' }}\nTEXT: {{ $json.text || '' }}\nFROM: {{ ($json.from?.value?.[0]?.address) || '' }}\nORIGIN: {{ $json.origin || null }}\nPLATFORM: {{ $json.platform || null }}\nBOOKING_DATE: {{ $json.bookingDate || null }}\nCURRENT_TIME: {{ (new Date()).toISOString() }}\n\nExtract the following JSON structure:\n\n{\n  \"guestName\": \"Extract guest name from email content\",\n  \"firstName\": \"First word of guestName in lowercase\", \n  \"platform\": \"Use PLATFORM value wrapped in array if not null\",\n  \"origin\": \"Use ORIGIN value\",\n  \"reservationNumber\": \"Extract reservation/booking number\",\n  \"checkInDate\": \"Convert arrival date to ISO format YYYY-MM-DDTHH:MM:SSZ\",\n  \"checkOutDate\": \"Convert departure date to ISO format YYYY-MM-DDTHH:MM:SSZ\", \n  \"accommodationName\": \"Map property name using rules below\",\n  \"propertyCodeVrbo\": null,\n  \"accommodationPrice\": Lodfigy - \"Extract RENT amount as number\" -, in Airbnb : $ XXXX x X nights ( e.g. $1,794.00 x 5 nights\n$8,970.00 )\n  \"resortFee\": null,\n  \"adults\": \"Extract number of people\",\n  \"children\": null,\n  \"guestPhone\": null,\n  \"guestEmail\": null,\n  \"bookingDate\": \"Use BOOKING_DATE value\",\n  \"discountAmount\": null,\n  \"cleaningFee\": null,\n  \"guestService\": null,\n  \"taxesAmount\": null,\n  \"damageProtectionFee\": null,\n  \"clubFee\": null,\n  \"baseCommissionOrHostFee\": null,\n  \"paymentProcessingFee\": null,\n  \"id\": \"Use ID value\",\n  \"dupKey\": \"Create as: firstName|checkInDate|checkOutDate\",\n  \"discardBecauseDuplicate\": false,\n  \"needsDateReview\": false\n}\n\nPROPERTY NAME MAPPING RULES:\nIf email text contains \"Villa Palacio\" or \"Palacio\" → return \"7256 Villa Palacio\"\nIf email text contains \"Ocean Grace\" or \"Grace\" → return \"2-105 Ocean Grace Villa\"\nIf email text contains \"Ocean Serenity\" or \"Serenity\" → return \"2-101 Ocean Serenity Villa\"\nIf email text contains \"Ocean Haven\" or \"Haven\" → return \"2-208 Ocean Haven Villa\"\nIf email text contains \"Ocean Sound\" or \"Sound\" → return \"2-103 Ocean Sound Villa\"  \nIf email text contains \"Ocean View\" or \"View\" → return \"315 Ocean View Villa\"\nIf email text contains \"Villa Clara\" or \"Clara\" → return \"3325 Villa Clara\"\nIf email text contains \"Villa Flora\" or \"Flora\" → return \"10180 Villa Flora\"\nIf email text contains \"Villa Paloma\" or \"Paloma\" → return \"5138 Villa Paloma\"\nIf email text contains \"Villa Tiffany\" or \"Tiffany\" → return \"10389 Villa Tiffany\"\nIf email text contains \"Casa Prestige\" or \"Prestige\" → return \"Atl. G7 Casa Prestige\"\nIf email text contains \"Casa Paraiso\" or \"Paraiso\" → return \"Est. 24 Casa Paraiso\"\nOtherwise return the property name as found in the email.\n\nEXTRACTION RULES:\n- Guest name: Look for \"payment from [NAME]\" or \"[NAME],\" in subject\n- Reservation number: Look for \"Id:B\" followed by numbers or \"#B\" followed by numbers\n- Dates: Look for \"Arrival:\" and \"Departure:\" followed by dates, convert to ISO format with T00:00:00Z\n- Accommodation price: Look for \"USD\" followed by numbers in quote section\n- People count: Look for \"People:\" followed by number\n- Platform array: If PLATFORM is not null, wrap in array like [\"Vrbo\"]\n\nRemember: Return ONLY the JSON object with no additional formatting or text.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        -16
+      ],
+      "id": "ccadf59d-a111-4173-a4fe-42cdc595a30b",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        336,
+        240
+      ],
+      "id": "6870898a-7d8b-4bad-87d0-057c1ed06f9e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "OELOR35LWBt7zBVc",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app2zC1KWcNeBXjXp",
+          "mode": "list",
+          "cachedResultName": "Luxe Booking",
+          "cachedResultUrl": "https://airtable.com/app2zC1KWcNeBXjXp"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl8kOPtlCiK5ePBE",
+          "mode": "list",
+          "cachedResultName": "Data_Test",
+          "cachedResultUrl": "https://airtable.com/app2zC1KWcNeBXjXp/tbl8kOPtlCiK5ePBE"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Discount": 0,
+            "Full Name": "={{ $('DatosReserva').item.json.guestName }}",
+            "Arrival": "={{ $('DatosReserva').item.json.checkInDate }}",
+            "Departure Date": "={{ $('DatosReserva').item.json.checkOutDate }}",
+            "Property": "={{ $('DatosReserva').item.json.accommodationName }}",
+            "Adults": "={{ $('DatosReserva').item.json.adults }}",
+            "Children": "={{ $('DatosReserva').item.json.children }}",
+            "Platform": "={{ $('DatosReserva').item.json.platform[0] }}",
+            "Reservation number": "={{ $('DatosReserva').item.json.reservationNumber }}",
+            "Cleaning Fee": "={{ $('DatosReserva').item.json.cleaningFee }}",
+            "Guest Service": "={{ $('DatosReserva').item.json.guestService }}",
+            "Taxes": "={{ $('DatosReserva').item.json.taxesAmount }}",
+            "Vrbo value 1 or Airbnb value": "={{ $node[\"DatosReserva\"].json.platform[0] === \"Airbnb\"\n    ? $node[\"DatosReserva\"].json.baseCommissionOrHostFee\n    : (\n        ($node[\"DatosReserva\"].json.accommodationPrice ?? 0) +\n        ($node[\"DatosReserva\"].json.resortFee ?? 0) +\n        ($node[\"DatosReserva\"].json.cleaningFee ?? 0) +\n        ($node[\"DatosReserva\"].json.taxesAmount ?? 0)\n      ) * 0.050262\n}}\n",
+            "Accommodation": "={{ $('DatosReserva').item.json.accommodationPrice + $('DatosReserva').item.json.resortFee }}",
+            "Gmail Message ID": "={{ $('DatosReserva').item.json.id}}",
+            "Booking Date": "={{ $('DatosReserva').item.json.bookingDate }}",
+            "Vrbo value 2": "={{ $node[\"DatosReserva\"].json.platform[0] === \"Airbnb\"\n    ? null\n    : ($node[\"DatosReserva\"].json.accommodationPrice + $node[\"DatosReserva\"].json.resortFee + $node[\"DatosReserva\"].json.cleaningFee) * 0.05\n}}\n",
+            "Phone Number": "={{ $('DatosReserva').item.json.guestPhone }}",
+            "E-mail": "={{ $('DatosReserva').item.json.guestEmail }}",
+            "dupKey": "={{ $('DatosReserva').item.json.dupKey}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Submission Date",
+              "displayName": "Submission Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created time",
+              "displayName": "Created time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Gmail Message ID",
+              "displayName": "Gmail Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Needs Date Review",
+              "displayName": "Needs Date Review",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Arrival Month",
+              "displayName": "Arrival Month",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Duplicates",
+              "displayName": "Duplicates",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Arrival",
+              "displayName": "Arrival",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Departure Date",
+              "displayName": "Departure Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Year",
+              "displayName": "Year",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Departure Month",
+              "displayName": "Departure Month",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Property",
+              "displayName": "Property",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "3325 Villa Clara",
+                  "value": "3325 Villa Clara"
+                },
+                {
+                  "name": "7256 Villa Palacio",
+                  "value": "7256 Villa Palacio"
+                },
+                {
+                  "name": "Est. 24 Casa Paraiso",
+                  "value": "Est. 24 Casa Paraiso"
+                },
+                {
+                  "name": "10180 Villa Flora",
+                  "value": "10180 Villa Flora"
+                },
+                {
+                  "name": "Atl. G7 Casa Prestige",
+                  "value": "Atl. G7 Casa Prestige"
+                },
+                {
+                  "name": "5138 Villa Paloma",
+                  "value": "5138 Villa Paloma"
+                },
+                {
+                  "name": "Temporal",
+                  "value": "Temporal"
+                },
+                {
+                  "name": "2-102 Ocean Bliss Villa",
+                  "value": "2-102 Ocean Bliss Villa"
+                },
+                {
+                  "name": "10389 Villa Tiffany",
+                  "value": "10389 Villa Tiffany"
+                },
+                {
+                  "name": "2-208 Ocean Haven Villa",
+                  "value": "2-208 Ocean Haven Villa"
+                },
+                {
+                  "name": "2-103 Ocean Sound Villa",
+                  "value": "2-103 Ocean Sound Villa"
+                },
+                {
+                  "name": "2-105 Ocean Grace Villa",
+                  "value": "2-105 Ocean Grace Villa"
+                },
+                {
+                  "name": "2-101 Ocean Serenity Villa",
+                  "value": "2-101 Ocean Serenity Villa"
+                },
+                {
+                  "name": "315 Ocean View Villa",
+                  "value": "315 Ocean View Villa"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Phone Number",
+              "displayName": "Phone Number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "E-mail",
+              "displayName": "E-mail",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Adults",
+              "displayName": "Adults",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Children",
+              "displayName": "Children",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Total Guests",
+              "displayName": "Total Guests",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Booking Date",
+              "displayName": "Booking Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Vrbo",
+                  "value": "Vrbo"
+                },
+                {
+                  "name": "Airbnb",
+                  "value": "Airbnb"
+                },
+                {
+                  "name": "Independent",
+                  "value": "Independent"
+                },
+                {
+                  "name": "Owner",
+                  "value": "Owner"
+                },
+                {
+                  "name": "Expenses",
+                  "value": "Expenses"
+                },
+                {
+                  "name": "HMF5K4T9HC",
+                  "value": "HMF5K4T9HC"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reservation number",
+              "displayName": "Reservation number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Accommodation",
+              "displayName": "Accommodation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Discount",
+              "displayName": "Discount",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": " Accommodation+ 2 ",
+              "displayName": " Accommodation+ 2 ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Cleaning Fee",
+              "displayName": "Cleaning Fee",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Guest Service",
+              "displayName": "Guest Service",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Taxes",
+              "displayName": "Taxes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": " Total Payment ",
+              "displayName": " Total Payment ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Total Stay Price ",
+              "displayName": " Total Stay Price ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Vrbo value 1 or Airbnb value",
+              "displayName": "Vrbo value 1 or Airbnb value",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Vrbo value 2",
+              "displayName": "Vrbo value 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": " Total Deduction ",
+              "displayName": " Total Deduction ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Host Service Fee ( Calculated )",
+              "displayName": "Host Service Fee ( Calculated )",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Total Host Payout ",
+              "displayName": " Total Host Payout ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Fee ",
+              "displayName": " Fee ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Rent ",
+              "displayName": " Rent ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "D. Passes Check",
+              "displayName": "D. Passes Check",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Special %",
+              "displayName": "Special %",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": " D. Passes + Taxes ( check independent ) ",
+              "displayName": " D. Passes + Taxes ( check independent ) ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Net Rent ",
+              "displayName": " Net Rent ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Split + D. passes (  according to owner )",
+              "displayName": "Split + D. passes (  according to owner )",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "ExpensesId",
+              "displayName": "ExpensesId",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Expenses.",
+              "displayName": "Expenses.",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Payout",
+              "displayName": "Payout",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": " Commission ",
+              "displayName": " Commission ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Nights",
+              "displayName": "Nights",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Special Requests",
+              "displayName": "Special Requests",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Day Passes Info Received",
+              "displayName": "Day Passes Info Received",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Day Passes at Concierge",
+              "displayName": "Day Passes at Concierge",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Day Passes Sent",
+              "displayName": "Day Passes Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Day Passes Activated",
+              "displayName": "Day Passes Activated",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Welcome Email Sent",
+              "displayName": "Welcome Email Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Waiver Sent",
+              "displayName": "Golf Cart Waiver Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Waiver Signed X",
+              "displayName": "Golf Cart Waiver Signed X",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status Waiver Signed",
+              "displayName": "Status Waiver Signed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Waiver Signed",
+              "displayName": "Golf Cart Waiver Signed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "E-mail Security Schedule",
+              "displayName": "E-mail Security Schedule",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Inspection Sent",
+              "displayName": "Golf Cart Inspection Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Inspection Signed X",
+              "displayName": "Golf Cart Inspection Signed X",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Inspection Signed",
+              "displayName": "Golf Cart Inspection Signed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Extra Doc",
+              "displayName": "Extra Doc",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Welcome Name",
+              "displayName": "Welcome Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Last Mod.",
+              "displayName": "Last Mod.",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Is Valid Booking",
+              "displayName": "Is Valid Booking",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "dupKey",
+              "displayName": "dupKey",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "discardBecauseDuplicate",
+              "displayName": "discardBecauseDuplicate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Vrbo Review",
+              "displayName": "Vrbo Review",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Now",
+              "displayName": "Now",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "isToday",
+              "displayName": "isToday",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Ready? ",
+              "displayName": "Ready? ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "D. Protection",
+              "displayName": "D. Protection",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Waiver Check",
+              "displayName": "Waiver Check",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "GolfCart Check",
+              "displayName": "GolfCart Check",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "OwnerCheck",
+              "displayName": "OwnerCheck",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Total Income",
+              "displayName": "Total Income",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Expenses",
+              "displayName": "Expenses",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Expenses 2",
+              "displayName": "Expenses 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Expenses 3",
+              "displayName": "Expenses 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Dependencies",
+              "displayName": "Dependencies",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Golf Cart Inspections",
+              "displayName": "Golf Cart Inspections",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Field 74",
+              "displayName": "Field 74",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Field 75",
+              "displayName": "Field 75",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1600,
+        -96
+      ],
+      "id": "1fba5b14-368d-4c82-85e7-a61151b2836e",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "i0UBqynyZlbfqlkV",
+          "name": "Airtable Trigger"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.from.value[0].address }}",
+                    "rightValue": "@airbnb.com",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "4a3ad17e-5e9b-435c-ba55-42c47d77ebe4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Airbnb"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6feaff32-47fb-4399-8415-4448c705f83e",
+                    "leftValue": "={{ $json.from.value[0].address }}",
+                    "rightValue": "@messaging.lodgify.com",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Lodgify"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "119f28df-42cb-4ac1-b622-7644b89ebafe",
+                    "leftValue": "={{ $json.from.value[0].address }}",
+                    "rightValue": "sender@messages.homeaway.com",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Vrbo"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -480,
+        -96
+      ],
+      "id": "7cff24f9-a89f-42c1-acc8-14b832abcb1e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"origin\": \"Airbnb\",\n  \"platform\": \"Airbnb\" \n}\n",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        -160
+      ],
+      "id": "aba4be3c-c1c5-466e-8d40-36a763e9b54a",
+      "name": "TagAirbnb"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"origin\": \"Lodgify\",\n  \"platform\": \"Vrbo\"\n}\n",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        16
+      ],
+      "id": "7fbf8cd2-fd19-494c-9dbf-03f5af1ecef9",
+      "name": "TagLodgify"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{ \"origin\": \"Vrbo\", \"platform\": \"Vrbo\" }",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -272,
+        160
+      ],
+      "id": "9cd587fc-f916-4ffe-8b88-adef2f50fed0",
+      "name": "TagVrbo"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -48,
+        -32
+      ],
+      "id": "5fda2e4b-2aad-408b-acb8-5b58b83e656a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "={{\"create\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "db4c0595-1f20-41e4-b5ae-909dee064ecc"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Crear"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4ed15d6d-5aa7-4636-9760-a90b5f5c312c",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "={{ \"discard\" }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Descartar"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1264,
+        -80
+      ],
+      "id": "0d76aab5-8dd3-4319-94d5-dfc2c7236d8d",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $input.first().json.output;\n\n// 1. Eliminar las comillas invertidas y la palabra \"json\"\nraw = raw.replace(/```json\\n?/, \"\").replace(/```$/, \"\");\n\n// 2. Parsear a JSON real\nlet data = JSON.parse(raw);\n\n// 3. Normalizar bookingDate si existe\n// Convertimos el string de la fecha a un formato completo que Airtable entiende\ndata.bookingDate = new Date(data.bookingDate).toISOString();\n\nreturn data;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -64
+      ],
+      "id": "ce537907-ac6d-46bc-ae68-f63ecf6e55de",
+      "name": "DatosReserva"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app2zC1KWcNeBXjXp",
+          "mode": "list",
+          "cachedResultName": "Luxe Booking",
+          "cachedResultUrl": "https://airtable.com/app2zC1KWcNeBXjXp"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl8kOPtlCiK5ePBE",
+          "mode": "list",
+          "cachedResultName": "Data_Test",
+          "cachedResultUrl": "https://airtable.com/app2zC1KWcNeBXjXp/tbl8kOPtlCiK5ePBE"
+        },
+        "filterByFormula": "=AND(FIND(\"{{ $json.dupKey }}\", {dupKey}) > 0, {Full Name}=\"{{ $json.guestName }}\")",
+        "options": {
+          "fields": []
+        },
+        "sort": {
+          "property": [
+            {
+              "field": "Created time"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        848,
+        -64
+      ],
+      "id": "e7a0e909-5824-497f-af45-cb36532b7cf7",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "i0UBqynyZlbfqlkV",
+          "name": "Airtable Trigger"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $json.headers || {};\nlet bookingDate = null;\n\nif (headers[\"x-received\"]) {\n  const match = headers[\"x-received\"].match(/\\w{3},\\s\\d{2}\\s\\w{3}\\s\\d{4}\\s\\d{2}:\\d{2}:\\d{2}/);\n  if (match) {\n    bookingDate = new Date(match[0]).toISOString();\n  }\n}\n\nreturn [{\n  json: {\n    ...$json,\n    bookingDate\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -16
+      ],
+      "id": "df199d56-7d58-4cd2-ac9b-1ca01b493eec",
+      "name": "BookingDateProcessor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\nlet datosReserva = null;\ntry {\n  datosReserva = $('DatosReserva').first().json;\n} catch (e) {\n  datosReserva = null;\n}\n\nlet output = [];\n\n// ¿Existe ya un registro en Airtable según la búsqueda?\nconst existeAirtable = inputItems.length > 0 && inputItems[0].json.id;\n\n// dupKey extraídos\nconst registroAirtable = existeAirtable ? inputItems[0].json : null;\nconst dupKeyAirtable = registroAirtable ? registroAirtable.dupKey : null;\nconst dupKeyReserva = datosReserva ? datosReserva.dupKey : null;\n\n// 1) DISCARD → si la búsqueda en Airtable devolvió un registro (ya existe match por dupKey + Full Name)\nif (existeAirtable) {\n  console.log('⚠️ DISCARD: ya existe registro en Airtable con mismo dupKey/FullName');\n  output = [{\n    json: {\n      debug: \"Duplicado detectado, se descarta\",\n      action: \"discard\",\n      found: true,\n      ...registroAirtable,\n      datosReserva\n    }\n  }];\n}\n\n// 2) CREATE → si no se encontró en Airtable y sí tenemos datosReserva\nelse if (!existeAirtable && datosReserva) {\n  console.log('✚ CREATE: no existe en Airtable, se creará nuevo registro');\n  output = [{\n    json: {\n      debug: \"Nuevo registro a crear\",\n      action: \"create\",\n      found: false,\n      ...datosReserva\n    }\n  }];\n}\n\n// 3) Fallback → si no hay datosReserva válidos\nelse {\n  console.log('∅ FALLBACK: sin datos válidos');\n  output = [{\n    json: {\n      debug: \"Sin datos válidos\",\n      action: \"discard\",\n      found: false\n    }\n  }];\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        -64
+      ],
+      "id": "cc418466-85e2-418e-8ed9-b80375d624b4",
+      "name": "DatosFinales",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "content": "## Data Processing\n",
+        "height": 752,
+        "width": 1664
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1056,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "f3f305ea-d8fa-4b9b-a99a-4fd99eb2e81f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Airtable processing\n",
+        "height": 480,
+        "width": 1184,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        640,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "8633729c-a319-496d-9d29-0ff25683daf3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ],
+          "q": "=from:(lodgify.com OR airbnb.com) (subject:\"New Confirmed Booking\" OR subject:\"confirmed booking\" OR subject:\"Reservation confirmed\" OR subject:\"You have a reservation\")"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        -80
+      ],
+      "id": "96dba61d-0867-4e0c-ae9b-08ec77fa109a",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DyUi1cfIwg3ePltU",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "DatosReserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "TagAirbnb",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TagLodgify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TagVrbo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TagAirbnb": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TagLodgify": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "TagVrbo": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "BookingDateProcessor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        []
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DatosReserva": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "DatosFinales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BookingDateProcessor": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DatosFinales": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "psN4L9NWKq8GRCR4"
+  },
+  "versionId": "dfdeef6a-8b7f-476f-83be-6a67bb2f989f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ecd2bca5374fb195b6b64c0d06c590a00cdc19d9a1b94b5ffba4794fc17e6089"
+  },
+  "id": "psN4L9NWKq8GRCR4",
+  "tags": []
+}
