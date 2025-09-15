@@ -49,7 +49,7 @@ Extract the following JSON structure:
   "checkOutDate": "Convert departure date to ISO format YYYY-MM-DDTHH:MM:SSZ",
   "accommodationName": "Map property name using rules below",
   "propertyCodeVrbo": null,
-  "accommodationPrice": "Extract RENT amount as number",
+  "accommodationPrice": "For Lodgify/Vrbo emails: Extract RENT amount + Resort Fee amount as number. For Airbnb: Extract accommodation price as number",
   "resortFee": null,
   "adults": "Extract number of people",
   "children": null,

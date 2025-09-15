@@ -179,7 +179,7 @@ function runSimplifiedTests() {
         checkInDate: platform === 'Airbnb' ? '2025-12-21' : '2025-10-24',
         checkOutDate: platform === 'Airbnb' ? '2025-12-26' : '2025-10-27',
         platform: platform,
-        accommodationPrice: platform === 'Airbnb' ? 8970 : 2159.91,
+        accommodationPrice: platform === 'Airbnb' ? 8970 : 2744.91, // Lodgify: 2159.91 (RENT) + 585.00 (Resort Fee)
         adults: platform === 'Airbnb' ? 5 : 8,
         dupKey: `${platform === 'Airbnb' ? 'Dana' : 'Sarai'}|${platform === 'Airbnb' ? '2025-12-21' : '2025-10-24'}|${platform === 'Airbnb' ? '2025-12-26' : '2025-10-27'}`,
         Property: '2-105 Ocean Grace Villa' // Mapeo simulado
